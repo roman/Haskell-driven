@@ -1,0 +1,86 @@
+name:                survenir
+version:             0.0.0.1
+-- synopsis:
+-- description:
+license:             MIT
+license-file:        LICENSE
+author:              Roman Gonzalez
+maintainer:          romanandreg@gmail.com
+copyright:           © 2017 Roman Gonzalez
+homepage:            https://github.com/roman/Haskell-survenir
+bug-reports:         https://github.com/roman/Haskell-survenir/issues
+category:            Test
+build-type:          Simple
+stability:           alpha (experimental)
+tested-with:         GHC == 7.10.3, GHC == 8.0.1, GHC == 8.0.2
+cabal-version:       >=1.10
+
+extra-source-files:
+  README.md
+  CHANGELOG.md
+  stack.yaml
+  resources/config/spec.yaml
+
+source-repository head
+  type:     git
+  location: https://github.com/roman/Haskell-survenir
+
+library
+  default-language:  Haskell2010
+  ghc-options:       -Wall -Werror -O2
+  hs-source-dirs:    src
+  exposed-modules:   Lib
+  build-depends:     base >= 4.8 && < 5
+                   , protolude
+                   , hjsonschema
+                   , etc
+
+executable survenir-exe
+  default-language:  Haskell2010
+  ghc-options:       -Wall -Werror -O2 -threaded -rtsopts -with-rtsopts=-N
+  hs-source-dirs:    src
+  main-is:           Main.hs
+  build-depends:     base >= 4.8 && < 5
+                   , protolude
+                   , survenir
+
+test-suite survenir-test
+  type:              exitcode-stdio-1.0
+  default-language:  Haskell2010
+  ghc-options:       -Wall -Werror -O2 -threaded -rtsopts -with-rtsopts=-N
+  hs-source-dirs:    test
+  main-is:           TestSuite.hs
+  build-depends:     base >= 4.8 && < 5
+                   , protolude
+                   , tasty
+                   , tasty-hunit
+                   , tasty-smallcheck
+                   , tasty-hspec
+                   , tasty-quickcheck
+                   , tasty-rerun
+                   , tasty-discovery
+                   , survenir
+
+test-suite survenir-doctest
+  type:              exitcode-stdio-1.0
+  default-language:  Haskell2010
+  ghc-options:       -Wall -Werror -O2 -threaded -rtsopts -with-rtsopts=-N
+  hs-source-dirs:    test
+  main-is:           DocTest.hs
+  build-depends:     base >= 4.8 && < 5
+                   , protolude
+                   , doctest
+                   , Glob
+                   , QuickCheck
+                   , survenir
+
+benchmark survenir-benchmark
+  type:              exitcode-stdio-1.0
+  default-language:  Haskell2010
+  ghc-options:       -Wall -Werror -O2 -threaded -rtsopts -with-rtsopts=-N
+  hs-source-dirs:    benchmark
+  main-is:           Main.hs
+  build-depends:     base >= 4.8 && < 5
+                   , protolude
+                   , criterion
+                   , survenir
