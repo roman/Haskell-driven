@@ -1,0 +1,8 @@
+survenir:
+  topic_validated:
+    input: sqs://
+    schema: resources/private/schema/topic_validated_v1.0.json
+  message_queued:
+    input: sqs://
+    output: sns://
+    schema: resources/private/schema/message_queued_v1.0.json

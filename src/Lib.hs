@@ -19,7 +19,7 @@ import Data.HashMap.Strict (HashMap)
 
 import qualified Data.Text as Text
 import qualified Data.HashMap.Strict as HashMap
-import qualified Data.ByteString.Lazy.Char8 as LB8
+import qualified Data.ByteString as BS
 import qualified JSONSchema.Draft4 as D4
 
 --------------------------------------------------------------------------------
@@ -93,8 +93,8 @@ allHandlers =
     , SomeEventHandler (Proxy :: Proxy "topic_validated"))
   ]
 
-handleEvent :: EventHandlers -> Text -> LB8.ByteString -> IO ()
-handleEvent handlers key payload =
+handleEvent :: EventHandlers -> Text -> BS.ByteString -> IO ()
+handleEvent handlers key payload' =
   case someSymbolVal (Text.unpack key) of
     SomeSymbol inputProxy ->
       case HashMap.lookup key handlers of
@@ -102,10 +102,25 @@ handleEvent handlers key payload =
           return ()
         Just (SomeEventHandler handlerProxy) ->
           when (isJust (sameSymbol inputProxy handlerProxy)) $ do
-            case decode payload of
+            case decodeStrict payload' of
               Nothing ->
                 putStrLn ("ignore" :: Text)
               Just event ->
                 _handleEvent handlerProxy event
 
 --------------------------------------------------------------------------------
+
+parseMessageQueued :: ByteString -> IO (Either D4.HTTPValidationFailure ())
+parseMessageQueued input0 = do
+  bts <- BS.readFile "resources/private/schema/message_queued_v1.0.json"
+  let
+    input =
+      fromMaybe (panic "invalid json") (decodeStrict input0)
+
+    schema =
+      fromMaybe (panic "invalid json schema") (decodeStrict bts)
+
+    schemaWithURI =
+      D4.SchemaWithURI schema Nothing
+
+  D4.fetchHTTPAndValidate schemaWithURI input

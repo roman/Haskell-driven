@@ -1,0 +1,13 @@
+{
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["message_id", "payload"],
+    "properties": {
+        "message_id": {
+            "type": "string"
+        },
+        "payload": {
+            "type": "object"
+        }
+    }
+}
