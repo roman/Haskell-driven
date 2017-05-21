@@ -14,12 +14,16 @@ build-type:          Simple
 stability:           alpha (experimental)
 tested-with:         GHC == 7.10.3, GHC == 8.0.1, GHC == 8.0.2
 cabal-version:       >=1.10
+data-dir:            resources
+data-files:
+  config/spec.yaml
+  private/schema/json/message_queued_v1.0.json
+  private/schema/proto/message_queued_v1_0.proto
 
 extra-source-files:
   README.md
   CHANGELOG.md
   stack.yaml
-  resources/config/spec.yaml
 
 source-repository head
   type:     git
@@ -30,14 +34,23 @@ library
   ghc-options:       -Wall -Werror -O2
   hs-source-dirs:    src
   exposed-modules:   Lib
+  other-modules:     Proto.MessageQueuedV10
   build-depends:     base >= 4.8 && < 5
                    , protolude
-                   , hjsonschema
-                   , bytestring
-                   , text
-                   , aeson
+                   --
+                   , bytestring >=0.10 && <0.11
+                   , containers >=0.5 && <0.6
+                   , text >=1.2 && <1.3
                    , unordered-containers
                    , etc
+                   --
+                   , aeson
+                   , hjsonschema
+                   --
+                   , proto-lens >=0.2 && <0.3
+                   , lens-family >=1.2 && <1.3
+                   , lens-labels >=0.1 && <0.2
+                   , data-default-class >=0.1 && <0.2
 
 executable survenir-exe
   default-language:  Haskell2010

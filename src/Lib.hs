@@ -20,6 +20,7 @@ import Data.HashMap.Strict (HashMap)
 import qualified Data.Text as Text
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as LBS
 import qualified JSONSchema.Draft4 as D4
 
 --------------------------------------------------------------------------------
@@ -30,22 +31,6 @@ data MessageQueued
     , payload   :: Value
     }
   deriving (Generic, FromJSON)
-
--- instance FromJSON MessageQueued where
---   parseJSON value =
---     case value of
---       Object obj -> do
---         ty <- obj .: "type"
---         if ty == ("message_queued" :: Text) then
---           return MessageQueued
---         else
---           typeMismatch "MessageQueued" value
---       _ ->
---         typeMismatch "MessageQueued" value
-
--- instance ToJSON MessageQueued where
---   toJSON _ =
---     object [("type" .= ("message_queued" :: Text))]
 
 data TopicValidated
   = TopicValidated
@@ -64,22 +49,33 @@ instance FromJSON TopicValidated where
         typeMismatch "TopicValidated" value
 
 
+class ToJSON ev => IOutputEvent ev where
+  _eventName :: ev -> Text
+  _encode :: ev -> BS.ByteString
+  _encode = LBS.toStrict . encode
+
 class FromJSON (Event evId) => IEventHandler (evId :: Symbol) where
   type Event evId :: *
-  _handleEvent :: Proxy evId -> Event evId -> IO ()
+  _handleEvent :: Proxy evId -> Event evId -> IO [SomeOutputEvent]
+
+data SomeOutputEvent
+  = forall ev. (IOutputEvent ev)
+    => SomeOutputEvent ev
 
 data SomeEventHandler
   = forall evId. (KnownSymbol evId, IEventHandler evId) => SomeEventHandler (Proxy evId)
 
 instance IEventHandler "message_queued" where
   type Event "message_queued" = MessageQueued
-  _handleEvent _ (MessageQueued {}) =
+  _handleEvent _ (MessageQueued {}) = do
     putStrLn ("MessageQueued" :: Text)
+    return []
 
 instance IEventHandler "topic_validated" where
   type Event "topic_validated" = TopicValidated
-  _handleEvent _ TopicValidated =
+  _handleEvent _ TopicValidated = do
     putStrLn ("TopicValidated" :: Text)
+    return []
 
 type EventHandlers = HashMap Text SomeEventHandler
 
@@ -93,26 +89,29 @@ allHandlers =
     , SomeEventHandler (Proxy :: Proxy "topic_validated"))
   ]
 
-handleEvent :: EventHandlers -> Text -> BS.ByteString -> IO ()
+handleEvent :: EventHandlers -> Text -> BS.ByteString -> IO [SomeOutputEvent]
 handleEvent handlers key payload' =
   case someSymbolVal (Text.unpack key) of
     SomeSymbol inputProxy ->
       case HashMap.lookup key handlers of
         Nothing ->
-          return ()
+          return []
         Just (SomeEventHandler handlerProxy) ->
-          when (isJust (sameSymbol inputProxy handlerProxy)) $ do
+          if (isJust (sameSymbol inputProxy handlerProxy)) then do
             case decodeStrict payload' of
-              Nothing ->
+              Nothing -> do
                 putStrLn ("ignore" :: Text)
+                return []
               Just event ->
                 _handleEvent handlerProxy event
+          else
+            return []
 
 --------------------------------------------------------------------------------
 
 parseMessageQueued :: ByteString -> IO (Either D4.HTTPValidationFailure ())
 parseMessageQueued input0 = do
-  bts <- BS.readFile "resources/private/schema/message_queued_v1.0.json"
+  bts <- BS.readFile "resources/private/schema/json/message_queued_v1.0.json"
   let
     input =
       fromMaybe (panic "invalid json") (decodeStrict input0)

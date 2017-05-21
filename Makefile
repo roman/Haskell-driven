@@ -57,6 +57,18 @@ repl_deps_install:
 	stack install pretty-show intero
 .PHONY: repl_deps_install
 
+proto_install:
+	stack install proto-lens-protoc
+.PHONY: proto_install
+
+proto: proto_install
+	protoc --plugin=protoc-gen-haskell=`which proto-lens-protoc` \
+		--haskell_out=src \
+		--proto_path=resources/private/schema/proto \
+		'resources/private/schema/proto/message_queued_v1_0.proto'
+
+.PHONY: proto
+
 repl: repl_deps_install ## start project repl
 	chmod go-w .
 	chmod go-w .ghci
