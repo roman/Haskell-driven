@@ -9,7 +9,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Lib where
+module JSON where
 
 import Protolude
 import GHC.TypeLits (Symbol, KnownSymbol, SomeSymbol(..), sameSymbol, someSymbolVal)
