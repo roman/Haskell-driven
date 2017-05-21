@@ -77,35 +77,33 @@ instance IEventHandler "topic_validated" where
     putStrLn ("TopicValidated" :: Text)
     return []
 
-type EventHandlers = HashMap Text SomeEventHandler
-
-allHandlers :: EventHandlers
-allHandlers =
-  HashMap.fromList [
-    ("message_queued"
-    , SomeEventHandler (Proxy :: Proxy "message_queued"))
-
-  , ("topic_validated"
-    , SomeEventHandler (Proxy :: Proxy "topic_validated"))
-  ]
-
-handleEvent :: EventHandlers -> Text -> BS.ByteString -> IO [SomeOutputEvent]
-handleEvent handlers key payload' =
-  case someSymbolVal (Text.unpack key) of
-    SomeSymbol inputProxy ->
-      case HashMap.lookup key handlers of
-        Nothing ->
-          return []
-        Just (SomeEventHandler handlerProxy) ->
-          if (isJust (sameSymbol inputProxy handlerProxy)) then do
-            case decodeStrict payload' of
-              Nothing -> do
-                putStrLn ("ignore" :: Text)
-                return []
-              Just event ->
-                _handleEvent handlerProxy event
-          else
+handleEvents
+  :: HashMap Text [SomeEventHandler]
+  -> Text
+  -> BS.ByteString
+  -> IO [SomeOutputEvent]
+handleEvents handlerMap evName input =
+  let
+    handleEvent :: KnownSymbol s => Proxy s -> SomeEventHandler -> IO [SomeOutputEvent]
+    handleEvent inputProxy (SomeEventHandler handlerProxy) =
+      if isJust (sameSymbol inputProxy handlerProxy) then
+        case decodeStrict input of
+          Nothing -> do
+            putStrLn $ "WARNING: Expecting Event " <> evName <> " to have a handler, but didn't"
             return []
+          Just event ->
+            _handleEvent handlerProxy event
+      else
+        return []
+
+  in
+    case someSymbolVal (Text.unpack evName) of
+      SomeSymbol inputProxy ->
+        case HashMap.lookup evName handlerMap of
+          Nothing ->
+            return []
+          Just handlers ->
+            concatMapM (handleEvent inputProxy) handlers
 
 --------------------------------------------------------------------------------
 

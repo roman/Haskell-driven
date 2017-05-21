@@ -12,32 +12,32 @@ module Backend where
 
 import Protolude
 import qualified Proto
-import qualified Lib
+import qualified JSON
 import Data.HashMap.Strict (HashMap)
 
 
 data SchemaBackend eventHandlerTy outEventTy =
   SchemaBackend {
-      eventCallbacks :: HashMap Text eventHandlerTy
-    , handleEvent :: HashMap Text eventHandlerTy -> Text -> ByteString -> IO [outEventTy]
+      eventCallbacks :: HashMap Text [eventHandlerTy]
+    , handleEvent :: HashMap Text [eventHandlerTy] -> Text -> ByteString -> IO [outEventTy]
     }
 
 jsonSchema
-  :: HashMap Text Lib.SomeEventHandler
-  -> SchemaBackend Lib.SomeEventHandler Lib.SomeOutputEvent
+  :: HashMap Text [JSON.SomeEventHandler]
+  -> SchemaBackend JSON.SomeEventHandler JSON.SomeOutputEvent
 jsonSchema callbacks =
   SchemaBackend {
       eventCallbacks = callbacks
-    , handleEvent = Lib.handleEvent
+    , handleEvent = JSON.handleEvents
     }
 
 protoBuffer
-  :: HashMap Text Proto.SomeEventHandler
+  :: HashMap Text [Proto.SomeEventHandler]
   -> SchemaBackend Proto.SomeEventHandler Proto.SomeOutputEvent
 protoBuffer callbacks =
   SchemaBackend {
       eventCallbacks = callbacks
-    , handleEvent = Proto.handleEvent
+    , handleEvent = Proto.handleEvents
     }
 
 {-

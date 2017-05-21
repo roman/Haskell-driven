@@ -1,4 +1,5 @@
 -- | Example of a library file. It is also used for testing the test suites.
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE ExistentialQuantification #-}
@@ -54,22 +55,29 @@ allHandlers =
     , SomeEventHandler (Proxy :: Proxy "message_queued"))
   ]
 
-handleEvent :: HashMap Text SomeEventHandler -> Text -> BS.ByteString -> IO [SomeOutputEvent]
-handleEvent handlers key input =
-  case someSymbolVal (Text.unpack key) of
-    SomeSymbol inputProxy ->
-      case HashMap.lookup key handlers of
-        Nothing ->
-          return []
-        Just (SomeEventHandler handlerProxy) ->
-          if (isJust (sameSymbol inputProxy handlerProxy)) then
-            case Proto.decodeMessage input of
-              Left err -> do
-                putStrLn err
-                return []
-              Right event ->
-                _handleEvent handlerProxy event
-          else
+handleEvents :: HashMap Text [SomeEventHandler] -> Text -> BS.ByteString -> IO [SomeOutputEvent]
+handleEvents handlerMap key input =
+  let
+    handleEvent :: KnownSymbol s => Proxy s -> SomeEventHandler -> IO [SomeOutputEvent]
+    handleEvent inputProxy (SomeEventHandler handlerProxy) =
+      if isJust (sameSymbol inputProxy handlerProxy) then
+        case Proto.decodeMessage input of
+          Left err -> do
+            putStrLn err
             return []
+          Right event ->
+            _handleEvent handlerProxy event
+      else
+        return []
+
+  in
+    case someSymbolVal (Text.unpack key) of
+      SomeSymbol inputProxy ->
+        case HashMap.lookup key handlerMap of
+          Nothing ->
+            return []
+          Just handlers ->
+            concatMapM (handleEvent inputProxy) handlers
+
 
 --------------------------------------------------------------------------------
