@@ -7,50 +7,38 @@
 module Config where
 
 import Protolude
-import Data.Aeson ((.:))
+import Data.Aeson ((.:), (.:?))
 import Data.HashMap.Strict (HashMap)
 import Data.Text (isSuffixOf)
 
-import GHC.TypeLits (Symbol)
-
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Aeson as JSON
-import qualified Data.Aeson.Types as JSON (typeMismatch)
-
-import qualified JSON as JSONSchema
-import qualified Proto as ProtoSchema
+import qualified Data.Aeson.Types as JSON (Parser, typeMismatch)
 
 type EventName = Text
--- type QueueURL = Text
--- type TopicARN = Text
--- type GCSubscriptionName = Text
--- type GCTopicName = Text
-
--- data BackendCredentials
---   = Memory
---   | GC
---   | AWS
 
 data EventSchema
   = JSONSchema Text
-  -- | Protobuffer
+  deriving (Generic, Show, Eq)
+
+data InputQueueType
+  = Memory { iqMaxSize :: Int }
   deriving (Generic, Show, Eq)
 
 data InputQueue
-  = InputQueueMemory
-  -- | AWSSQS QueueURL
-  -- | GCSubscription GCTopicName GCSubscriptionName
+  = InputQueue {
+      iqType        :: InputQueueType
+    , iqWorkerCount :: Int
+    }
   deriving (Generic, Show, Eq)
 
 data OutputTopic
-  = OutputTopicMemory
-  -- | AWSSNS TopicARN
-  -- | GCPublisher GCTopicName
+  = OutputTopic
   deriving (Generic, Show, Eq)
 
 data EventSpec =
   EventSpec {
-    esInputQueue   :: InputQueue
+    esInputQueue   :: [InputQueue]
   , esOutputTopics :: [OutputTopic]
   , esEventSchema  :: EventSchema
   }
@@ -67,7 +55,6 @@ data WorkerSpec =
 newtype Config =
   Config {
     eventEntries :: HashMap EventName EventSpec
-  -- , backendCredentials :: [BackendCredentials]
   }
   deriving (Generic, Show)
 
@@ -75,22 +62,37 @@ instance JSON.FromJSON EventSchema where
   parseJSON value =
     case value of
       JSON.String name
-        -- | name == "protobuffer" ->
-        --   return Protobuffer
-        | name `isSuffixOf` ".json" ->
+        | ".json" `isSuffixOf` name ->
           return (JSONSchema name)
+
         | otherwise ->
-          JSON.typeMismatch "DidWat.EventSchema" value
+          JSON.typeMismatch "Paseo.EventSchema" value
+
       _ ->
-        JSON.typeMismatch "DidWat.EventSchema" value
+        JSON.typeMismatch "Paseo.EventSchema" value
 
 instance JSON.FromJSON OutputTopic where
   parseJSON _ =
-    return OutputTopicMemory
+    return OutputTopic
+
+parseMemoryInput :: HashMap Text JSON.Value -> JSON.Parser InputQueueType
+parseMemoryInput obj =
+  Memory <$> obj .: "max_size"
 
 instance JSON.FromJSON InputQueue where
-  parseJSON _ =
-    return InputQueueMemory
+  parseJSON value =
+    case value of
+      JSON.Object obj -> do
+        queueTy <- obj .: "type"
+        if queueTy == ("memory" :: Text) then
+          InputQueue
+            <$> parseMemoryInput obj
+            <*> obj .: "worker_count"
+        else
+          JSON.typeMismatch "Paseo.InputQueue" value
+
+      _ ->
+        JSON.typeMismatch "Paseo.InputQueue" value
 
 instance JSON.FromJSON EventSpec where
   parseJSON value =
@@ -98,15 +100,14 @@ instance JSON.FromJSON EventSpec where
       JSON.Object obj ->
         EventSpec
           <$> obj .: "input"
-          <*> obj .: "output"
+          <*> (fromMaybe [] <$> obj .:? "output")
           <*> obj .: "schema"
       _ ->
-        JSON.typeMismatch "DidWat.EventSpec" value
+        JSON.typeMismatch "Paseo.EventSpec" value
 
 instance JSON.FromJSON Config where
   parseJSON value =
     let
-
       step input acc eventName = do
         eventSpec <- input .: eventName
         return $ HashMap.insert eventName eventSpec acc
@@ -117,29 +118,18 @@ instance JSON.FromJSON Config where
           Config
             <$> foldM (step input) HashMap.empty (HashMap.keys input)
         _ ->
-          JSON.typeMismatch "DidWat.Config" value
+          JSON.typeMismatch "Paseo.Config" value
 
-
-type family GEventCallback (schema :: Symbol) :: *
-
-type instance GEventCallback "json_schema" = JSONSchema.SomeEventHandler
--- type instance GEventCallback "protobuf" = ProtoSchema.SomeEventHandler
-
-newtype EventCallbackRegistry schema
-  = ECR (HashMap EventName [GEventCallback schema])
-
---------------------------------------------------------------------------------
-
-workerSpecs :: Config -> [WorkerSpec]
-workerSpecs config =
+toWorkerSpecs :: Config -> [WorkerSpec]
+toWorkerSpecs (Config entries) =
+  -- Derive a worker per input
   let
-    step eventName eventSpec acc =
+    step eventName eventSpec allWorkers =
       let
-        ws =
-          WorkerSpec { wsInputQueue = esInputQueue eventSpec
-                     , wsEventName  = eventName
-                     , wsEventSchema = esEventSchema eventSpec }
+        workers = do
+          inputQueue <- esInputQueue eventSpec
+          return $ WorkerSpec inputQueue eventName (esEventSchema eventSpec)
       in
-        ws : acc
+        workers <> allWorkers
   in
-    HashMap.foldrWithKey step [] (eventEntries config)
+    HashMap.foldrWithKey step [] entries
