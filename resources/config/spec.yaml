@@ -1,8 +1,25 @@
-didwat:
+events:
   topic_validated:
-    input: sqs://
-    schema: resources/private/schema/topic_validated_v1.0.json
+    # schema: resources/private/schema/json/topic_validated_v1.0.json
+    input:
+    - type: memory_queue
+      max_size: 1000
+      retry_after_ms: 1000
+      worker:
+        timeout_ms: 3000
+        count: 2
+
   message_queued:
-    input: sqs://
-    output: sns://
-    schema: protobuffer
+    schema: resources/private/schema/json/message_queued_v1.0.json
+    input:
+    - type: memory_queue
+      max_size: 1000
+      worker:
+        timeout_ms: 3000
+        count: 2
+    # - type: sqs
+    #   url: sqs://
+    #
+    # output:
+    # - type: sns
+    #   sns_arn: sns://...

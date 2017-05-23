@@ -1,3 +1,10 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE KindSignatures #-}
@@ -6,130 +13,101 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 module Config where
 
+import GHC.TypeLits (SomeSymbol(..), Symbol, KnownSymbol, someSymbolVal, sameSymbol)
+
 import Protolude
 import Data.Aeson ((.:), (.:?))
 import Data.HashMap.Strict (HashMap)
 import Data.Text (isSuffixOf)
 
+import Data.Hashable (Hashable)
+import qualified Data.Text as Text
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Aeson as JSON
 import qualified Data.Aeson.Types as JSON (Parser, typeMismatch)
 
+--------------------------------------------------------------------------------
+
 type EventName = Text
 
-data EventSchema
-  = JSONSchema Text
-  deriving (Generic, Show, Eq)
+data WorkerSpec =
+  WorkerSpec {
+    wsTimeout :: Int
+  , wsCount   :: Int
+  }
+  deriving (Generic, Show, Eq, Hashable)
 
-data InputQueueType
-  = Memory { iqMaxSize :: Int }
-  deriving (Generic, Show, Eq)
-
-data InputQueue
-  = InputQueue {
-      iqType        :: InputQueueType
-    , iqWorkerCount :: Int
+data InputSpec
+  = MemoryQueueSpec
+    { iqMaxSize      :: Int
+    , iqWorkerSpec   :: WorkerSpec
+    , iqRetryAfterMs :: Int
     }
-  deriving (Generic, Show, Eq)
+  deriving (Generic, Show, Eq, Hashable)
 
-data OutputTopic
-  = OutputTopic
+
+data OutputSpec
+  = OutputSpec
   deriving (Generic, Show, Eq)
 
 data EventSpec =
   EventSpec {
-    esInputQueue   :: [InputQueue]
-  , esOutputTopics :: [OutputTopic]
-  , esEventSchema  :: EventSchema
+    esInputSpec  :: [InputSpec]
+  , esOutputSpec :: [OutputSpec]
   }
-  deriving (Generic, Show)
-
-data WorkerSpec =
-  WorkerSpec {
-    wsInputQueue  :: InputQueue
-  , wsEventName   :: EventName
-  , wsEventSchema :: EventSchema
-  }
-  deriving (Generic, Show)
+  deriving (Generic, Show, Eq)
 
 newtype Config =
   Config {
     eventEntries :: HashMap EventName EventSpec
   }
-  deriving (Generic, Show)
+  deriving (Generic, Show, Eq)
 
-instance JSON.FromJSON EventSchema where
-  parseJSON value =
-    case value of
-      JSON.String name
-        | ".json" `isSuffixOf` name ->
-          return (JSONSchema name)
+--------------------------------------------------------------------------------
 
-        | otherwise ->
-          JSON.typeMismatch "Paseo.EventSchema" value
+parseWorkerSpec :: JSON.Value -> JSON.Parser WorkerSpec
+parseWorkerSpec value =
+  case value of
+    JSON.Object workerObj ->
+      WorkerSpec
+      <$> workerObj .: "timeout_ms"
+      <*> workerObj .: "count"
+    _ ->
+      JSON.typeMismatch "Paseo.WorkerSpec" value
 
-      _ ->
-        JSON.typeMismatch "Paseo.EventSchema" value
 
-instance JSON.FromJSON OutputTopic where
-  parseJSON _ =
-    return OutputTopic
+parseMemoryQueueInput :: JSON.Value -> JSON.Parser InputSpec
+parseMemoryQueueInput value =
+  case value of
+    JSON.Object memoryQueueObj -> do
+      MemoryQueueSpec
+        <$> memoryQueueObj .: "max_size"
+        <*> (memoryQueueObj .: "worker"
+             >>= parseWorkerSpec)
+        <*> memoryQueueObj .: "retry_after_ms"
+    _ ->
+      JSON.typeMismatch "Paseo.InputSpec" value
 
-parseMemoryInput :: HashMap Text JSON.Value -> JSON.Parser InputQueueType
-parseMemoryInput obj =
-  Memory <$> obj .: "max_size"
+instance JSON.FromJSON InputSpec where
+  parseJSON =
+    parseMemoryQueueInput
 
-instance JSON.FromJSON InputQueue where
-  parseJSON value =
-    case value of
-      JSON.Object obj -> do
-        queueTy <- obj .: "type"
-        if queueTy == ("memory" :: Text) then
-          InputQueue
-            <$> parseMemoryInput obj
-            <*> obj .: "worker_count"
-        else
-          JSON.typeMismatch "Paseo.InputQueue" value
+-- -- TODO: OutputSpec parser
 
-      _ ->
-        JSON.typeMismatch "Paseo.InputQueue" value
+-- instance JSON.FromJSON OutputSpec where
+--   parseJSON _ =
+--     return OutputSpec
 
-instance JSON.FromJSON EventSpec where
-  parseJSON value =
-    case value of
-      JSON.Object obj ->
-        EventSpec
-          <$> obj .: "input"
-          <*> (fromMaybe [] <$> obj .:? "output")
-          <*> obj .: "schema"
-      _ ->
-        JSON.typeMismatch "Paseo.EventSpec" value
+-- parseEventSpec :: JSON.Value -> JSON.Parser EventSpec
+-- parseEventSpec value =
+--   case value of
+--     JSON.Object eventObj ->
+--       EventSpec
+--       <$> eventObj .: "input"
+--       <*> (fromMaybe [] <$> eventObj .: "output")
+--     _ ->
+--       JSON.typeMismatch "Paseo.EventSpec" value
 
-instance JSON.FromJSON Config where
-  parseJSON value =
-    let
-      step input acc eventName = do
-        eventSpec <- input .: eventName
-        return $ HashMap.insert eventName eventSpec acc
-
-    in
-      case value of
-        JSON.Object input ->
-          Config
-            <$> foldM (step input) HashMap.empty (HashMap.keys input)
-        _ ->
-          JSON.typeMismatch "Paseo.Config" value
-
-toWorkerSpecs :: Config -> [WorkerSpec]
-toWorkerSpecs (Config entries) =
-  -- Derive a worker per input
-  let
-    step eventName eventSpec allWorkers =
-      let
-        workers = do
-          inputQueue <- esInputQueue eventSpec
-          return $ WorkerSpec inputQueue eventName (esEventSchema eventSpec)
-      in
-        workers <> allWorkers
-  in
-    HashMap.foldrWithKey step [] entries
+-- instance JSON.FromJSON EventSpec where
+--   parseJSON =
+--     parseEventSpec

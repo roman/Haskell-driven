@@ -1,0 +1,44 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+module Input where
+
+import Protolude
+
+import Control.Concurrent.STM (atomically)
+import Control.Concurrent.STM.TBQueue (newTBQueueIO, writeTBQueue, readTBQueue, unGetTBQueue)
+import Config
+
+data Input
+  = MemoryInput {
+      readFromInput   :: IO (ByteString, IO ())
+    , writeToInput    :: ByteString -> IO ()
+    }
+
+createMemoryQueueInput :: Int -> Int -> IO Input
+createMemoryQueueInput retryMillis totalSize = do
+  queue <- newTBQueueIO totalSize
+  let
+    unread =
+      atomically . unGetTBQueue queue
+
+    read = do
+      message <- atomically $ readTBQueue queue
+      retryAsync <- async $ threadDelay retryMillis >> unread message
+      return (message, cancel retryAsync)
+
+    write =
+      atomically . writeTBQueue queue
+
+  return $ MemoryInput read write
+
+
+createInput :: InputSpec -> IO Input
+createInput inputSpec =
+  case inputSpec of
+    MemoryQueueSpec {..} ->
+      createMemoryQueueInput iqRetryAfterMs iqMaxSize
