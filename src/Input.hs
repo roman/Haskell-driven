@@ -13,11 +13,7 @@ import Control.Concurrent.STM (atomically)
 import Control.Concurrent.STM.TBQueue (newTBQueueIO, writeTBQueue, readTBQueue, unGetTBQueue)
 import Config
 
-data Input
-  = MemoryInput {
-      readFromInput   :: IO (ByteString, IO ())
-    , writeToInput    :: ByteString -> IO ()
-    }
+--------------------------------------------------------------------------------
 
 createMemoryQueueInput :: Int -> Int -> IO Input
 createMemoryQueueInput retryMillis totalSize = do
@@ -40,5 +36,5 @@ createMemoryQueueInput retryMillis totalSize = do
 createInput :: InputSpec -> IO Input
 createInput inputSpec =
   case inputSpec of
-    MemoryQueueSpec {..} ->
-      createMemoryQueueInput iqRetryAfterMs iqMaxSize
+    InputMemoryQueueSpec {..} ->
+      createMemoryQueueInput isRetryAfterMs isMaxSize

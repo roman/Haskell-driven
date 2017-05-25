@@ -1,19 +1,32 @@
+inputs:
+- type: memory_queue
+  name: mem_topic_validated
+  max_size: 1000
+  retry_after_ms: 10000
+- type: memory_queue
+  name: mem_message_queued
+  max_size: 1000
+  retry_after_ms: 10000
+
+outputs:
+- type: memory_queue
+  name: mem_topic_validated
+
 events:
   topic_validated:
-    # schema: resources/private/schema/json/topic_validated_v1.0.json
-    input:
-    - type: memory_queue
-      max_size: 1000
-      retry_after_ms: 1000
-      worker:
-        timeout_ms: 3000
-        count: 2
+    schema: resources/private/schema/json/topic_validated_v1.0.json
+    workers:
+    - input: mem_topic_validated
+      timeout_ms: 3000
+      count: 2
+
+    outputs:
+    - mem_topic_validated
 
   message_queued:
     schema: resources/private/schema/json/message_queued_v1.0.json
-    input:
-    - type: memory_queue
-      max_size: 1000
+    inputs:
+    - name: mem_topic_validated
       worker:
         timeout_ms: 3000
         count: 2
