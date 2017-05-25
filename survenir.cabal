@@ -56,6 +56,7 @@ library
                    , async
                    , stm-chans
                    , stm
+                   , ghc-prim
 
 executable survenir-exe
   default-language:  Haskell2010

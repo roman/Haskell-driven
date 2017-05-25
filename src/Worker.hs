@@ -27,13 +27,13 @@ fetchWorkerInputSource
   -> WorkerSpec
   -> HashMap InputName Input
   -> IO Input
-fetchWorkerInputSource eventName workerSpec allInputs =
+fetchWorkerInputSource evName workerSpec allInputs =
   let
     inputName =
       wsInputName workerSpec
 
   in
-    maybe (throwIO $ InputNameNotFound eventName inputName)
+    maybe (throwIO $ InputNameNotFound evName inputName)
           return
           (HashMap.lookup inputName allInputs)
 
@@ -44,13 +44,13 @@ createWorker
   -> HashMap EventName (EventSpec, [Output])
   -> (WorkerMsg -> IO ())
   -> IO Worker
-createWorker (eventName, eventSpec) workerSpec allInputs outputsPerEvent msgHandler = do
-  evInputSource <- fetchWorkerInputSource eventName workerSpec allInputs
+createWorker (evName, evSpec) workerSpec allInputs outputsPerEvent msgHandler = do
+  evInputSource <- fetchWorkerInputSource evName workerSpec allInputs
 
   let
     workerEnv =
       WorkerEnv {
-        weEventSpec = (eventName, eventSpec)
+        weEventSpec = (evName, evSpec)
       , weOutputs   = outputsPerEvent
       }
 
@@ -74,41 +74,45 @@ createWorker (eventName, eventSpec) workerSpec allInputs outputsPerEvent msgHand
 
   return (Worker (cancel workerLoop))
 
--- workerHandler :: HashMap EventName [SomeEventHandler] -> WorkerMsg -> IO ()
--- workerHandler eventHandlerMap (WorkerMsg env payload deleteMsg) =
---   let
---     evName =
---       fst $ weEventSpec env
+workerHandler :: HashMap EventName [SomeEventHandler] -> WorkerMsg -> IO ()
+workerHandler eventHandlerMap (WorkerMsg env payload deleteMsg) =
+  let
+    evName =
+      fst $ weEventSpec env
 
---     evSchema =
---       case esSchema $ snd $ weEventSpec env of
---         JSONSchema _ ->
---           SJSON
+    evSchema =
+      case esSchema $ snd $ weEventSpec env of
+        JsonSchema _ ->
+          SJson
 
---     outputMap =
---       weOutputs env
+    outputMap =
+      weOutputs env
 
---     handleEvent
---       :: (KnownSymbol evId, IEventHandler schema evId, IEvent (Event evId))
---       => SSchema schema -> Proxy evId -> SomeEventHandler -> IO [SomeOutputEvent]
---     handleEvent schema inputProxy (SomeEventHandler otherSchema handlerProxy) =
---       if isJust (sameSymbol handlerProxy inputProxy) then
---         case unsafeCoerce $ _parseEvent schema handlerProxy payload of
---           Nothing -> do
---             putStrLn $ "WARNING: Expecting Event " <> evName <> " to have a handler, but didn't"
---             return []
---           Just event ->
---             _handleEvent schema handlerProxy event
---       else
---         return []
+    handleEvent
+      :: ( KnownSymbol evId
+         , IEventHandler evId
+         , InputEventConstraint schema (Event evId)
+         )
+      => SSchema schema -> Proxy evId -> SomeEventHandler -> IO [SomeOutputEvent]
+    handleEvent _schema inputProxy (SomeEventHandler innerSchema handlerProxy) =
+      if isJust (sameSymbol handlerProxy inputProxy) then
+        case _parseEvent innerSchema handlerProxy payload of
+          Nothing -> do
+            putStrLn $ "WARNING: Expecting Event " <> evName <> " to have a handler, but didn't"
+            return []
+          Just event ->
+            _handleEvent handlerProxy event
+      else
+        return []
 
---   in
---     case someSymbolVal (Text.unpack evName) of
---       SomeSymbol inputProxy ->
---         case HashMap.lookup evName eventHandlerMap of
---           Nothing ->
---             return ()
---           Just handlers ->
---             forM_ handlers $ \handler -> do
---               outputEvents <- handleEvent evSchema inputProxy handler
---               mapM_ (_emitEvent outputMap evSchema) outputEvents
+  in
+    case someSymbolVal (Text.unpack evName) of
+      SomeSymbol inputProxy ->
+        case HashMap.lookup evName eventHandlerMap of
+          Nothing ->
+            -- TODO: Log warning
+            return ()
+          Just handlers ->
+            forM_ handlers $ \handler -> do
+              outputEvents <- handleEvent evSchema inputProxy handler
+              mapM_ (_emitEvent evSchema outputMap) outputEvents

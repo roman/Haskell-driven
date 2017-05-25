@@ -1,0 +1,9 @@
+{
+    "type": "object",
+    "required": ["tvMessageId"],
+    "properties": {
+        "tvMessageI": {
+            "type": "string"
+        }
+    }
+}

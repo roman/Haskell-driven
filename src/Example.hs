@@ -11,7 +11,6 @@ module Example where
 import Protolude
 
 import qualified Data.HashMap.Strict as HashMap
-import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Aeson as JSON
 
 import Config
@@ -24,18 +23,21 @@ data TopicValidated
   = TopicValidated { tvMessageId :: Text }
   deriving (Generic, JSON.FromJSON, JSON.ToJSON)
 
+instance IOutputEventEmitter TopicValidated
 instance IEvent TopicValidated where
   eventName _ = "topic_validated"
 
 eventSchemas =
   HashMap.fromList [
   ( "topic_validated"
-  , ( EventSpec (JSONSchema "foobar") [] []
+  , ( EventSpec (JsonSchema "resources/topic_validate.json") [] []
     , [Output print]))
   ]
 
+main :: IO ()
 main = do
-  _emitEvent eventSchemas SJSON (SomeOutputEvent (TopicValidated "abc-123")) >>= print
+  _emitEvent SJSON eventSchemas (SomeOutputEvent SJson (TopicValidated "abc-123")) >>= print
+  -- _emitEvent SJson eventSchemas (TopicValidated "abc-123")
 
 -- instance IOutputEvent 'JSON TopicValidated where
 --   _eventName _ _ = "topic_validated"

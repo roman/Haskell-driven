@@ -16,9 +16,9 @@ module Config where
 
 import Protolude
 
-import Data.Aeson ((.:), (.:?))
+import Data.Aeson ((.:))
 import Data.HashMap.Strict (HashMap)
-import GHC.TypeLits (SomeSymbol, Symbol, KnownSymbol, symbolVal, sameSymbol)
+import GHC.TypeLits (Symbol, KnownSymbol)
 
 import Data.Text (isSuffixOf)
 
@@ -28,6 +28,8 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Aeson as JSON
 import qualified Data.Aeson.Types as JSON (Parser, typeMismatch)
+import qualified Data.ProtoLens as Proto (Message, encodeMessage, decodeMessage)
+import qualified JSONSchema.Draft4 as D4
 
 --------------------------------------------------------------------------------
 
@@ -46,8 +48,8 @@ data WorkerSpec
   deriving (Generic, Show, Eq)
 
 data SchemaSpec
-  = NoSchema
-  | JSONSchema { schemaUri :: Text }
+  = JsonSchema { schemaUri :: Text }
+  | Protobuffer
   deriving (Generic, Show, Eq)
 
 data EventSpec
@@ -90,10 +92,12 @@ instance Exception ConfigError
 --------------------
 
 data Schema
-  = JSON
+  = Json
+  | Proto
 
 data SSchema (s :: Schema) where
-  SJSON :: SSchema 'JSON
+  SJson  :: SSchema 'Json
+  SProto :: SSchema 'Proto
 
 data Input
   = Input
@@ -126,88 +130,16 @@ data Worker
 
 --------------------------------------------------------------------------------
 
-type family EventInputConstraint (schema :: Schema) :: * -> Constraint where
-  EventInputConstraint 'JSON = JSON.FromJSON
-
-type family EventOutputConstraint (schema :: Schema) :: * -> Constraint where
-  EventOutputConstraint 'JSON = JSON.ToJSON
-
-class IEvent ev where
-  eventName :: ev -> Text
-
-class ( IEvent ev
-      , EventOutputConstraint schema ev )
-  => IOutputEventEmitter schema ev where
-  _emitEvent
-    :: HashMap EventName (EventSpec, [Output])
-    -> SSchema schema
-    -> ev
-    -> IO ()
-
-instance ( IEvent ev
-         , JSON.ToJSON ev )
-  => IOutputEventEmitter 'JSON ev where
-  _emitEvent outputMap SJSON event =
-    case HashMap.lookup (eventName event) outputMap of
-      Nothing ->
-        return ()
-      Just (eventSpec, outputs)  ->
-        case esSchema eventSpec of
-          JSONSchema _jsonSchema ->
-            let
-              serializedOutput = LBS.toStrict (JSON.encode event)
-            in
-              mapM_ (flip writeToOutput serializedOutput) outputs
-          _ ->
-            return ()
-
-data SomeOutputEvent
-  = forall ev. ( IEvent ev
-               , IOutputEventEmitter 'JSON ev
-               ) =>
-      SomeOutputEvent ev
-
-instance IEvent SomeOutputEvent where
-  eventName (SomeOutputEvent ev) =
-    eventName ev
-
-instance JSON.ToJSON SomeOutputEvent where
-  toJSON (SomeOutputEvent ev) =
-    JSON.toJSON ev
-
-class (EventInputConstraint schema (Event evId))
-  => IEventHandler schema evId where
-
-  type Event (evId :: Symbol) :: *
-
-  _parseEvent
-    :: SSchema schema
-    -> Proxy evId
-    -> ByteString
-    -> Maybe (Event evId)
-  _parseEvent SJSON _ =
-    JSON.decodeStrict
-
-  _handleEvent
-    :: SSchema schema
-    -> Proxy evId
-    -> Event evId
-    -> IO [SomeOutputEvent]
-
-data SomeEventHandler
-  = forall schema evId. (KnownSymbol evId, IEventHandler schema evId) =>
-    SomeEventHandler (SSchema schema) (Proxy evId)
-
---------------------------------------------------------------------------------
-
 parseSchemaSpec
   :: JSON.Value
   -> JSON.Parser SchemaSpec
 parseSchemaSpec value =
   case value of
-    JSON.String uri
-      | ".json" `isSuffixOf` uri ->
-        return (JSONSchema uri)
+    JSON.String schemaName
+      | ".json" `isSuffixOf` schemaName ->
+        return (JsonSchema schemaName)
+      | schemaName == "protobuffer" ->
+        return Protobuffer
       | otherwise ->
         JSON.typeMismatch "Driven.SchemaSpec" value
 
@@ -272,7 +204,7 @@ parseEventSpec value =
   case value of
     JSON.Object eventObj ->
       EventSpec
-      <$> (fromMaybe NoSchema <$> eventObj .:? "schema")
+      <$> eventObj .: "schema"
       <*> eventObj .: "workers"
       <*> (fromMaybe [] <$> eventObj .: "outputs")
     _ ->
@@ -281,3 +213,135 @@ parseEventSpec value =
 instance JSON.FromJSON EventSpec where
   parseJSON =
     parseEventSpec
+
+--------------------------------------------------------------------------------
+
+class FromProtobuff msg where
+  fromProtobuff :: ByteString -> Either [Char] msg
+
+instance Proto.Message msg => FromProtobuff msg where
+  fromProtobuff = Proto.decodeMessage
+
+class ToProtobuff msg where
+  toProtobuff :: msg -> ByteString
+
+instance Proto.Message msg => ToProtobuff msg where
+  toProtobuff = Proto.encodeMessage
+
+type family InputEventConstraint (schema :: Schema) :: * -> Constraint where
+  InputEventConstraint 'Json = JSON.FromJSON
+  InputEventConstraint 'Proto = FromProtobuff
+
+type family OutputEventConstraint (schema :: Schema) :: * -> Constraint where
+  OutputEventConstraint 'Json = JSON.ToJSON
+  OutputEventConstraint 'Proto = ToProtobuff
+
+--------------------
+
+class IEvent ev where
+  eventName :: ev -> Text
+
+class ( IEvent ev ) => IOutputEventEmitter ev where
+  _emitEvent
+    :: OutputEventConstraint schema ev
+    => SSchema schema
+    -> HashMap EventName (EventSpec, [Output])
+    -> ev
+    -> IO ()
+  _emitEvent schema outputMap event =
+    case HashMap.lookup (eventName event) outputMap of
+      Nothing ->
+        return ()
+      Just (eventSpec, outputs)  ->
+        case (schema, esSchema eventSpec) of
+          (SJson, JsonSchema jsonSchemaPath) ->
+            let
+              eventJson =
+                JSON.toJSON event
+
+            in do
+              schemaJson <-
+                (fromMaybe (panic "Invalid JSON format on schema") . JSON.decodeStrict)
+                <$> BS.readFile (Text.unpack jsonSchemaPath)
+              result <-
+                D4.fetchHTTPAndValidate (D4.SchemaWithURI schemaJson Nothing)
+                                        eventJson
+
+              case result of
+                Left _ ->
+                  -- TODO: Change this to a logger
+                  panic "JSON serialization doesn't comply with JSON schema"
+                Right _ ->
+                  mapM_ (flip writeToOutput $ LBS.toStrict (JSON.encode eventJson))
+                        outputs
+
+          (SProto, Protobuffer) ->
+            let
+              serializedOutput =
+                toProtobuff event
+            in
+              mapM_ (flip writeToOutput serializedOutput) outputs
+
+          (_codeConstraint, configConstraint) ->
+            panic
+            $ "ERROR: Expecting " <> show configConstraint
+            <> " but got different constraint on code"
+
+data SomeOutputEvent =
+  forall schema ev. (OutputEventConstraint schema ev, IOutputEventEmitter ev) =>
+    SomeOutputEvent (SSchema schema) ev
+
+instance IEvent SomeOutputEvent where
+  eventName (SomeOutputEvent _ ev) =
+    eventName ev
+
+instance JSON.ToJSON SomeOutputEvent where
+  toJSON (SomeOutputEvent innerSchema ev) =
+    case innerSchema of
+      SJson ->
+        JSON.toJSON ev
+      _ ->
+        panic "Internal OutputEvent is not JSON serializable"
+
+instance ToProtobuff SomeOutputEvent where
+  toProtobuff (SomeOutputEvent innerSchema ev) =
+    case innerSchema of
+      SProto ->
+        toProtobuff ev
+      _ ->
+        panic "Internal OutputEvent is not Protobuff serializable"
+
+instance IOutputEventEmitter SomeOutputEvent where
+  _emitEvent _schema outputMap (SomeOutputEvent innerSchema ev) =
+    _emitEvent innerSchema outputMap ev
+
+
+--------------------
+-- Event Handler (Input)
+
+class IEventHandler evId where
+  type Event (evId :: Symbol) :: *
+
+  _parseEvent
+    :: (InputEventConstraint schema (Event evId))
+    => SSchema schema
+    -> Proxy evId
+    -> ByteString
+    -> Maybe (Event evId)
+  _parseEvent schema _ bs =
+    case schema of
+      SJson ->
+        JSON.decodeStrict bs
+      SProto ->
+        either (const Nothing) Just (fromProtobuff bs)
+
+  _handleEvent
+    :: Proxy evId
+    -> Event evId
+    -> IO [SomeOutputEvent]
+
+data SomeEventHandler
+  = forall schema evId. (KnownSymbol evId,
+                         IEventHandler evId,
+                         InputEventConstraint schema (Event evId)) =>
+    SomeEventHandler (SSchema schema) (Proxy evId)
