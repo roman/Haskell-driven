@@ -24,13 +24,13 @@ createMemoryQueueInput retryMillis totalSize = do
 
     read = do
       message <- atomically $ readTBQueue queue
-      retryAsync <- async $ threadDelay retryMillis >> unread message
+      retryAsync <- async $ threadDelay retryMillis -- >> unread message
       return (message, cancel retryAsync)
 
     write =
       atomically . writeTBQueue queue
 
-  return $ MemoryInput read write
+  return $ Input read write
 
 
 createInput :: InputSpec -> IO Input

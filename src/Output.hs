@@ -13,26 +13,24 @@ import Config
 --------------------------------------------------------------------------------
 
 createMemoryQueueOutput
-  :: EventName
-  -> HashMap InputName Input
+  :: HashMap InputName Input
   -> InputName
   -> IO Output
-createMemoryQueueOutput eventName allInputs inputName =
+createMemoryQueueOutput allInputs inputName =
   case HashMap.lookup inputName allInputs of
     Nothing ->
-      throwIO $ InputNameNotFound eventName inputName
+      throwIO $ InputNameNotFound inputName
     Just eventInput ->
-      return $ MemoryOutput (writeToInput eventInput)
+      return $ Output (writeToInput eventInput)
 
 createOutput
-  :: EventName
-  -> HashMap InputName Input
+  :: HashMap InputName Input
   -> OutputSpec
   -> IO Output
-createOutput eventName allInputs outputSpec =
+createOutput allInputs outputSpec =
   case outputSpec of
     OutputMemoryQueueSpec {..} ->
-      createMemoryQueueOutput eventName allInputs osName
+      createMemoryQueueOutput allInputs osName
 
 collectOutputsPerEventName
   :: HashMap EventName EventSpec
@@ -40,13 +38,13 @@ collectOutputsPerEventName
   -> IO (HashMap EventName (EventSpec, [Output]))
 collectOutputsPerEventName allEvents allOutputs =
   let
-    step acc (eventName, eventSpec) = do
+    step acc (evName, eventSpec) = do
       outputs <-
         forM (esOutputNames eventSpec) $ \outputName -> do
-          maybe (throwIO $ OutputNameNotFound eventName outputName)
+          maybe (throwIO $ OutputNameNotFound evName outputName)
                 return
                 (HashMap.lookup outputName allOutputs)
-      return $ HashMap.insert eventName (eventSpec, outputs) acc
+      return $ HashMap.insert evName (eventSpec, outputs) acc
 
   in
     foldM step HashMap.empty (HashMap.toList allEvents)

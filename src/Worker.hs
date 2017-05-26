@@ -1,41 +1,74 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 module Worker where
 
 import Protolude
 
-import Unsafe.Coerce (unsafeCoerce)
-
-import GHC.TypeLits (KnownSymbol, SomeSymbol(..), someSymbolVal, sameSymbol)
-
 import Control.Concurrent.Async (async, cancel)
 import Control.Concurrent.QSemN (newQSemN, waitQSemN, signalQSemN)
 import Data.HashMap.Strict (HashMap)
 
 import qualified Data.HashMap.Strict as HashMap
-import qualified Data.Text as Text
+import qualified Data.Aeson as JSON
 
 import Config
 
 fetchWorkerInputSource
-  :: EventName
-  -> WorkerSpec
+  :: WorkerSpec
   -> HashMap InputName Input
   -> IO Input
-fetchWorkerInputSource evName workerSpec allInputs =
+fetchWorkerInputSource workerSpec allInputs =
   let
     inputName =
       wsInputName workerSpec
 
   in
-    maybe (throwIO $ InputNameNotFound evName inputName)
+    maybe (throwIO $ InputNameNotFound inputName)
           return
           (HashMap.lookup inputName allInputs)
+
+workerHandler :: HashMap EventName [SomeEventHandler] -> WorkerMsg -> IO ()
+workerHandler eventHandlerMap (WorkerMsg env payload deleteMsg) =
+  let
+    evName =
+      fst $ weEventSpec env
+
+    evSchema =
+      esSchema $ snd $ weEventSpec env
+
+    outputMap =
+      weOutputs env
+
+    handleEvent
+      :: SomeEventHandler -> IO [SomeOutputEvent]
+    handleEvent someHandler =
+      case (evSchema, someHandler) of
+        (JsonSchema {}, JsonEventHandler handler) -> do
+          putStrLn ("===> json" :: Text)
+          maybe (putStrLn ("ignoring message: " <> payload) >> return [])
+                (handler . Msg deleteMsg)
+                (JSON.decodeStrict payload)
+        (Protobuffer, ProtoEventHandler handler) -> do
+          putStrLn ("===> proto" :: Text)
+          maybe (putStrLn ("ignoring message: " <> payload) >> return [])
+                (handler . Msg deleteMsg)
+                (fromProtobuff payload)
+        _ -> do
+          putStrLn
+            $ "WARNING: event " <> evName <> " has invalid format"
+          return []
+
+  in do
+    putStrLn $ "===> " <> evName
+    case HashMap.lookup evName eventHandlerMap of
+      Nothing ->
+        -- TODO: Log warning here with more context
+        putStrLn ("Invalid event name received" :: Text)
+      Just handlers -> do
+        print ("===>", length handlers)
+        forM_ handlers $ \handler -> do
+          outputEvents <- handleEvent handler
+          mapM_ (_emitEvent outputMap) outputEvents
 
 createWorker
   :: (EventName, EventSpec)
@@ -45,7 +78,7 @@ createWorker
   -> (WorkerMsg -> IO ())
   -> IO Worker
 createWorker (evName, evSpec) workerSpec allInputs outputsPerEvent msgHandler = do
-  evInputSource <- fetchWorkerInputSource evName workerSpec allInputs
+  evInputSource <- fetchWorkerInputSource workerSpec allInputs
 
   let
     workerEnv =
@@ -56,6 +89,7 @@ createWorker (evName, evSpec) workerSpec allInputs outputsPerEvent msgHandler = 
 
     callHandler = do
       (message, deleteMessage) <- readFromInput evInputSource
+      print (evName, message)
       async $ do
         let
           workerMsg =
@@ -73,46 +107,3 @@ createWorker (evName, evSpec) workerSpec allInputs outputsPerEvent msgHandler = 
       callHandler `finally` signalQSemN workerSemaphore 1
 
   return (Worker (cancel workerLoop))
-
-workerHandler :: HashMap EventName [SomeEventHandler] -> WorkerMsg -> IO ()
-workerHandler eventHandlerMap (WorkerMsg env payload deleteMsg) =
-  let
-    evName =
-      fst $ weEventSpec env
-
-    evSchema =
-      case esSchema $ snd $ weEventSpec env of
-        JsonSchema _ ->
-          SJson
-
-    outputMap =
-      weOutputs env
-
-    handleEvent
-      :: ( KnownSymbol evId
-         , IEventHandler evId
-         , InputEventConstraint schema (Event evId)
-         )
-      => SSchema schema -> Proxy evId -> SomeEventHandler -> IO [SomeOutputEvent]
-    handleEvent _schema inputProxy (SomeEventHandler innerSchema handlerProxy) =
-      if isJust (sameSymbol handlerProxy inputProxy) then
-        case _parseEvent innerSchema handlerProxy payload of
-          Nothing -> do
-            putStrLn $ "WARNING: Expecting Event " <> evName <> " to have a handler, but didn't"
-            return []
-          Just event ->
-            _handleEvent handlerProxy event
-      else
-        return []
-
-  in
-    case someSymbolVal (Text.unpack evName) of
-      SomeSymbol inputProxy ->
-        case HashMap.lookup evName eventHandlerMap of
-          Nothing ->
-            -- TODO: Log warning
-            return ()
-          Just handlers ->
-            forM_ handlers $ \handler -> do
-              outputEvents <- handleEvent evSchema inputProxy handler
-              mapM_ (_emitEvent evSchema outputMap) outputEvents

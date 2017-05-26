@@ -10,7 +10,7 @@ inputs:
 
 outputs:
 - type: memory_queue
-  name: mem_topic_validated
+  deliver_to: mem_topic_validated
 
 events:
   topic_validated:
@@ -25,11 +25,11 @@ events:
 
   message_queued:
     schema: resources/private/schema/json/message_queued_v1.0.json
-    inputs:
-    - name: mem_topic_validated
-      worker:
-        timeout_ms: 3000
-        count: 2
+    workers:
+    - input: mem_message_queued
+      timeout_ms: 3000
+      count: 2
+    outputs: []
     # - type: sqs
     #   url: sqs://
     #

@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedLists #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
@@ -10,10 +11,14 @@ module Example where
 
 import Protolude
 
+import System.IO (hSetBuffering, BufferMode(..))
+
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Aeson as JSON
+import qualified Data.Yaml as YAML
 
 import Config
+import Core
 
 data MessageQueued
   = MessageQueued { mqMessageId :: Text }
@@ -23,32 +28,32 @@ data TopicValidated
   = TopicValidated { tvMessageId :: Text }
   deriving (Generic, JSON.FromJSON, JSON.ToJSON)
 
-instance IOutputEventEmitter TopicValidated
+
+data MessageReceived
+  = MessageReceived { mrMessageId :: Text }
+  deriving (Generic, JSON.FromJSON, JSON.ToJSON)
+
+instance IEvent MessageReceived where
+  eventName _ = "message_queued"
+
+handleMessageReceived :: Msg MessageReceived -> IO [SomeOutputEvent]
+handleMessageReceived (Msg deleteMsg (MessageReceived msgId)) = do
+  putStrLn $ "message_queued " <> msgId
+  deleteMsg
+  return [json $ TopicValidated "abc-123"]
+
 instance IEvent TopicValidated where
   eventName _ = "topic_validated"
 
-eventSchemas =
-  HashMap.fromList [
-  ( "topic_validated"
-  , ( EventSpec (JsonSchema "resources/topic_validate.json") [] []
-    , [Output print]))
-  ]
-
 main :: IO ()
 main = do
-  _emitEvent SJSON eventSchemas (SomeOutputEvent SJson (TopicValidated "abc-123")) >>= print
-  -- _emitEvent SJson eventSchemas (TopicValidated "abc-123")
-
--- instance IOutputEvent 'JSON TopicValidated where
---   _eventName _ _ = "topic_validated"
---   _encode _ = LBS.toStrict . JSON.encode
-
--- instance IEventHandler 'JSON "topic_validated" where
---   type Event "topic_validated" = TopicValidated
---   _handleEvent _ _ (TopicValidated {}) =
---     return []
-
--- instance IEventHandler 'JSON "message_queued" where
---   type Event "message_queued" = MessageQueued
---   _handleEvent _ _ (MessageQueued {}) =
---     return [json $ TopicValidated "abc-123"]
+  hSetBuffering stdout LineBuffering
+  Right drivenConfig <- YAML.decodeFileEither "./resources/config/spec.yaml"
+  drivenRuntime <-
+    startSystem drivenConfig [("message_queued", [jsonHandler handleMessageReceived])]
+  case HashMap.lookup "mem_message_queued" (runtimeInputs drivenRuntime) of
+    Nothing ->
+      putStrLn ("wtf" :: Text)
+    Just input -> do
+      putStrLn ("fuubar" :: Text)
+      writeToInput input "{\"mrMessageId\": \"abc-123\"}"

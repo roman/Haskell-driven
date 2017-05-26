@@ -112,10 +112,10 @@ parseMessageQueued input0 = do
   bts <- BS.readFile "resources/private/schema/json/message_queued_v1.0.json"
   let
     input =
-      fromMaybe (panic "invalid json") (decodeStrict input0)
+      fromMaybe (putStrLn "invalid json") (decodeStrict input0)
 
     schema =
-      fromMaybe (panic "invalid json schema") (decodeStrict bts)
+      fromMaybe (putStrLn "invalid json schema") (decodeStrict bts)
 
     schemaWithURI =
       D4.SchemaWithURI schema Nothing

@@ -1,4 +1,4 @@
-name:                survenir
+name:                driven
 version:             0.0.0.1
 -- synopsis:
 -- description:
@@ -7,8 +7,8 @@ license-file:        LICENSE
 author:              Roman Gonzalez
 maintainer:          romanandreg@gmail.com
 copyright:           © 2017 Roman Gonzalez
-homepage:            https://github.com/roman/Haskell-survenir
-bug-reports:         https://github.com/roman/Haskell-survenir/issues
+homepage:            https://github.com/roman/Haskell-driven
+bug-reports:         https://github.com/roman/Haskell-driven/issues
 category:            Test
 build-type:          Simple
 stability:           alpha (experimental)
@@ -27,13 +27,13 @@ extra-source-files:
 
 source-repository head
   type:     git
-  location: https://github.com/roman/Haskell-survenir
+  location: https://github.com/roman/Haskell-driven
 
 library
   default-language:  Haskell2010
   ghc-options:       -Wall -Werror -O2
   hs-source-dirs:    src
-  exposed-modules:   Lib
+  exposed-modules:   Config
   other-modules:     Proto.MessageQueuedV10
   build-depends:     base >= 4.8 && < 5
                    , protolude
@@ -57,17 +57,18 @@ library
                    , stm-chans
                    , stm
                    , ghc-prim
+                   , yaml
 
-executable survenir-exe
-  default-language:  Haskell2010
-  ghc-options:       -Wall -Werror -O2 -threaded -rtsopts -with-rtsopts=-N
-  hs-source-dirs:    src
-  main-is:           Main.hs
-  build-depends:     base >= 4.8 && < 5
-                   , protolude
-                   , survenir
+-- executable driven-exe
+--   default-language:  Haskell2010
+--   ghc-options:       -Wall -Werror -O2 -threaded -rtsopts -with-rtsopts=-N
+--   hs-source-dirs:    src
+--   main-is:           Main.hs
+--   build-depends:     base >= 4.8 && < 5
+--                    , protolude
+--                    , driven
 
-test-suite survenir-test
+test-suite driven-test
   type:              exitcode-stdio-1.0
   default-language:  Haskell2010
   ghc-options:       -Wall -Werror -O2 -threaded -rtsopts -with-rtsopts=-N
@@ -82,9 +83,9 @@ test-suite survenir-test
                    , tasty-quickcheck
                    , tasty-rerun
                    , tasty-discovery
-                   , survenir
+                   , driven
 
-test-suite survenir-doctest
+test-suite driven-doctest
   type:              exitcode-stdio-1.0
   default-language:  Haskell2010
   ghc-options:       -Wall -Werror -O2 -threaded -rtsopts -with-rtsopts=-N
@@ -95,9 +96,9 @@ test-suite survenir-doctest
                    , doctest
                    , Glob
                    , QuickCheck
-                   , survenir
+                   , driven
 
-benchmark survenir-benchmark
+benchmark driven-benchmark
   type:              exitcode-stdio-1.0
   default-language:  Haskell2010
   ghc-options:       -Wall -Werror -O2 -threaded -rtsopts -with-rtsopts=-N
@@ -106,4 +107,4 @@ benchmark survenir-benchmark
   build-depends:     base >= 4.8 && < 5
                    , protolude
                    , criterion
-                   , survenir
+                   , driven
