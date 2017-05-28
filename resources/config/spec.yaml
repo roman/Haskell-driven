@@ -2,15 +2,16 @@ inputs:
 - type: memory_queue
   name: mem_topic_validated
   max_size: 1000
-  retry_after_ms: 10000
+  retry_after_ms: 120000
+
 - type: memory_queue
   name: mem_message_queued
   max_size: 1000
-  retry_after_ms: 10000
+  retry_after_ms: 120000
 
 outputs:
 - type: memory_queue
-  deliver_to: mem_topic_validated
+  name: mem_topic_validated
 
 events:
   topic_validated:

@@ -65,7 +65,6 @@ workerHandler eventHandlerMap (WorkerMsg env payload deleteMsg) =
         -- TODO: Log warning here with more context
         putStrLn ("Invalid event name received" :: Text)
       Just handlers -> do
-        print ("===>", length handlers)
         forM_ handlers $ \handler -> do
           outputEvents <- handleEvent handler
           mapM_ (_emitEvent outputMap) outputEvents

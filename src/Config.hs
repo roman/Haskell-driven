@@ -37,6 +37,8 @@ type TimeoutMillis = Int
 type InputName = Text
 type OutputName = Text
 type EventName = Text
+type TypeName = Text
+type ErrorMessage = Text
 
 data WorkerSpec
   = WorkerSpec
@@ -60,16 +62,21 @@ data EventSpec
   deriving (Generic, Show, Eq)
 
 data InputSpec
-  = InputMemoryQueueSpec
-    { isName         :: InputName
-    , isMaxSize      :: Size
-    , isRetryAfterMs :: TimeoutMillis
+  = InputSpec
+    { isName         :: Text
+    , isTypeName     :: TypeName
+    , isObject       :: HashMap Text JSON.Value
+    , isDrivenObject :: HashMap Text JSON.Value
     }
   deriving (Generic, Show, Eq)
 
 data OutputSpec
-  = OutputMemoryQueueSpec
-    { osName :: InputName }
+  = OutputSpec
+    { osName          :: Text
+    , osTypeName      :: TypeName
+    , osObject        :: HashMap Text JSON.Value
+    , osDrivenObject  :: HashMap Text JSON.Value
+    }
   deriving (Generic, Show, Eq)
 
 data DrivenConfig
@@ -87,17 +94,21 @@ instance JSON.FromJSON DrivenConfig where
       JSON.Object configSpecObj -> do
         DrivenConfig
           <$> configSpecObj .: "events"
-          <*> configSpecObj .: "inputs"
-          <*> configSpecObj .: "outputs"
+          <*> (configSpecObj .: "inputs"
+                >>= mapM (parseInputSpec configSpecObj))
+          <*> (configSpecObj .: "outputs"
+                >>= mapM (parseOutputSpec configSpecObj))
       _ ->
         JSON.typeMismatch "DrivenConfig" value
 
-data ConfigError
+data DrivenError
   = InputNameNotFound InputName
   | OutputNameNotFound EventName OutputName
+  | InputCreationError InputSpec ErrorMessage
+  | OutputCreationError OutputSpec ErrorMessage
   deriving (Generic, Show)
 
-instance Exception ConfigError
+instance Exception DrivenError
 
 --------------------
 
@@ -119,6 +130,13 @@ data Input
 data Output
   = Output
     { writeToOutput :: ByteString -> IO () }
+
+data
+  Backend
+  = Backend {
+      createInput  :: InputSpec -> IO Input
+    , createOutput :: HashMap InputName Input -> OutputSpec -> IO Output
+    }
 
 data WorkerEnv
   = WorkerEnv {
@@ -177,37 +195,31 @@ instance JSON.FromJSON WorkerSpec where
   parseJSON =
     parseWorkerSpec
 
-parseInputMemoryQueue
-  :: JSON.Value
+parseInputSpec
+  :: HashMap Text JSON.Value
+  -> JSON.Value
   -> JSON.Parser InputSpec
-parseInputMemoryQueue value =
-  case value of
-    JSON.Object memoryQueueObj -> do
-      InputMemoryQueueSpec
-        <$> memoryQueueObj .: "name"
-        <*> memoryQueueObj .: "max_size"
-        <*> memoryQueueObj .: "retry_after_ms"
+parseInputSpec drivenConfigObj inputSpecValue =
+  case inputSpecValue of
+    JSON.Object inputSpecObj -> do
+      inputTypeName <- inputSpecObj .: "type"
+      inputName <- inputSpecObj .: "name"
+      return $ InputSpec inputName inputTypeName inputSpecObj drivenConfigObj
     _ ->
-      JSON.typeMismatch "Driven.InputSpec" value
+      JSON.typeMismatch "Driven.InputSpec" inputSpecValue
 
-instance JSON.FromJSON InputSpec where
-  parseJSON =
-    parseInputMemoryQueue
-
-parseOutputMemoryQueue
-  :: JSON.Value
+parseOutputSpec
+  :: HashMap Text JSON.Value
+  -> JSON.Value
   -> JSON.Parser OutputSpec
-parseOutputMemoryQueue value =
-  case value of
-    JSON.Object memoryQueueObj -> do
-      OutputMemoryQueueSpec
-        <$> memoryQueueObj .: "deliver_to"
+parseOutputSpec drivenConfigObj outputSpecValue =
+  case outputSpecValue of
+    JSON.Object outputSpecObj -> do
+      outputTypeName <- outputSpecObj .: "type"
+      outputName <- outputSpecObj .: "name"
+      return $ OutputSpec outputName outputTypeName outputSpecObj drivenConfigObj
     _ ->
-      JSON.typeMismatch "Driven.OutputSpec" value
-
-instance JSON.FromJSON OutputSpec where
-  parseJSON =
-    parseOutputMemoryQueue
+      JSON.typeMismatch "Driven.OutputSpec" outputSpecValue
 
 parseEventSpec :: JSON.Value -> JSON.Parser EventSpec
 parseEventSpec value =
