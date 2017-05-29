@@ -32,7 +32,7 @@ collectOutputsPerEventName allEvents allOutputs =
   let
     step acc (evName, eventSpec) = do
       outputs <-
-        forM (esOutputNames eventSpec) $ \outputName -> do
+        forM (esOutputNames eventSpec) $ \outputName ->
           maybe (throwIO $ OutputNameNotFound evName outputName)
                 return
                 (HashMap.lookup outputName allOutputs)

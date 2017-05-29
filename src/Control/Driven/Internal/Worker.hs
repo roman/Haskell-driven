@@ -91,11 +91,11 @@ workerHandler eventHandlerMap (WorkerMsg env payload deleteMsg) =
           weEmitEvent env $ EventFormatMissconfigured (weInputName env) evName
           return []
 
-  in do
+  in
     case HashMap.lookup evName eventHandlerMap of
       Nothing ->
         weEmitEvent env $ EventHandlerMissconfigured (weInputName env) evName
-      Just handlers -> do
+      Just handlers ->
         forM_ handlers $ \handler -> do
           outputEvents <- handleEvent handler
           mapM_ (_emitEvent outputMap) outputEvents

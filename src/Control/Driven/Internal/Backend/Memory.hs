@@ -60,7 +60,7 @@ memCreateInput
   :: (DrivenEvent -> IO ())
   -> InputSpec
   -> IO Input
-memCreateInput emitEvent spec@(InputSpec {..}) =
+memCreateInput emitEvent spec@InputSpec {..} =
   case JSON.parseEither parseMemoryQueue isObject of
     Left err ->
       throwIO $ InputCreationError spec (Text.pack err)
@@ -75,7 +75,7 @@ memCreateOutput
   -> HashMap InputName Input
   -> OutputSpec
   -> IO Output
-memCreateOutput emitEvent allInputs (OutputSpec {..}) =
+memCreateOutput emitEvent allInputs OutputSpec {..} =
   case HashMap.lookup osName allInputs of
     Nothing ->
       throwIO $ InputNameNotFound osName

@@ -103,7 +103,7 @@ data DrivenConfig
 instance JSON.FromJSON DrivenConfig where
   parseJSON value =
     case value of
-      JSON.Object configSpecObj -> do
+      JSON.Object configSpecObj ->
         DrivenConfig
           <$> configSpecObj .: "events"
           <*> (configSpecObj .: "inputs"
@@ -153,9 +153,14 @@ instance JSON.ToJSON DrivenEvent where
     let
       options =
         JSON.defaultOptions {
-          JSON.fieldLabelModifier = drivenEventLabelModifier
-        , JSON.constructorTagModifier = JSON.camelTo2 '_'
-        , JSON.sumEncoding = (JSON.defaultTaggedObject { JSON.tagFieldName = "type" })
+          JSON.fieldLabelModifier =
+            drivenEventLabelModifier
+
+        , JSON.constructorTagModifier =
+            JSON.camelTo2 '_'
+
+        , JSON.sumEncoding =
+            JSON.defaultTaggedObject { JSON.tagFieldName = "type" }
         }
     in
       JSON.genericToEncoding options
@@ -213,7 +218,7 @@ data WorkerMsg
     , wmDeleteMsg :: IO ()
     }
 
-data Worker
+newtype Worker
   = Worker
     { disposeWorker :: IO () }
 
@@ -343,7 +348,7 @@ _emitEvent
   :: HashMap EventName (EventSpec, [Output])
   -> SomeOutputEvent
   -> IO ()
-_emitEvent outputMap someEvent = do
+_emitEvent outputMap someEvent =
     case HashMap.lookup (eventName someEvent) outputMap of
       Nothing ->
         return ()
@@ -367,7 +372,7 @@ _emitEvent outputMap someEvent = do
                   -- TODO: Change this to a logger
                   putStrLn ("JSON serialization doesn't comply with JSON schema" :: Text)
                 Right _ ->
-                  mapM_ (flip writeToOutput $ LBS.toStrict (JSON.encode eventJson))
+                  mapM_ (`writeToOutput` LBS.toStrict (JSON.encode eventJson))
                         outputs
 
           (ProtoOutputEvent event, Protobuffer) ->
@@ -375,7 +380,7 @@ _emitEvent outputMap someEvent = do
               serializedOutput =
                 toProtobuff event
             in
-              mapM_ (flip writeToOutput serializedOutput) outputs
+              mapM_ (`writeToOutput` serializedOutput) outputs
 
           (_codeConstraint, configConstraint) ->
             putStrLn
@@ -395,10 +400,10 @@ jsonHandler
   :: (JSON.FromJSON ev)
   => (Msg ev -> IO [SomeOutputEvent])
   -> SomeEventHandler
-jsonHandler handler = JsonEventHandler handler
+jsonHandler = JsonEventHandler
 
 protoHandler
   :: (FromProtobuff ev)
   => (Msg ev -> IO [SomeOutputEvent])
   -> SomeEventHandler
-protoHandler handler = ProtoEventHandler handler
+protoHandler = ProtoEventHandler
