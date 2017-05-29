@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-module Worker where
+module Control.Driven.Internal.Worker where
 
 import Protolude
 
@@ -13,7 +13,7 @@ import qualified Data.Text.Encoding as Text (decodeUtf8)
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Aeson as JSON
 
-import Config
+import Control.Driven.Internal.Types
 
 fetchWorkerInputSource
   :: WorkerSpec

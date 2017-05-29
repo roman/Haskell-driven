@@ -12,7 +12,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-module Config where
+module Control.Driven.Internal.Types where
 
 import Protolude
 

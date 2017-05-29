@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-module IO.Memory where
+module Control.Driven.Internal.Backend.Memory where
 
 import Protolude
 
@@ -17,7 +17,7 @@ import qualified Data.HashMap.Strict as HashMap
 
 import qualified Data.Text as Text
 
-import Config
+import Control.Driven.Internal.Types
 
 --------------------------------------------------------------------------------
 -- Input

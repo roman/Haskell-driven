@@ -14,11 +14,6 @@ build-type:          Simple
 stability:           alpha (experimental)
 tested-with:         GHC == 7.10.3, GHC == 8.0.1, GHC == 8.0.2
 cabal-version:       >=1.10
-data-dir:            resources
-data-files:
-  config/spec.yaml
-  private/schema/json/message_queued_v1.0.json
-  private/schema/proto/message_queued_v1_0.proto
 
 extra-source-files:
   README.md
@@ -33,8 +28,10 @@ library
   default-language:  Haskell2010
   ghc-options:       -Wall -Werror -O2
   hs-source-dirs:    src
-  exposed-modules:   Config
-  other-modules:     Proto.MessageQueuedV10
+  exposed-modules:   Control.Driven.Internal.Core
+  other-modules:     Control.Driven.Internal.Types
+                   , Control.Driven.Internal.Worker
+                   , Control.Driven.Internal.Backend.Memory
   build-depends:     base >= 4.8 && < 5
                    , protolude
                    --
