@@ -1,18 +1,19 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 module Control.Driven.Internal.Backend.Memory where
 
 import Protolude
 
 import Data.HashMap.Strict (HashMap)
 
-import Control.Concurrent.STM (atomically)
-import Control.Concurrent.STM.TBQueue (newTBQueueIO, writeTBQueue, readTBQueue, unGetTBQueue)
+import Control.Concurrent.STM         (atomically)
+import Control.Concurrent.STM.TBQueue
+    (newTBQueueIO, readTBQueue, unGetTBQueue, writeTBQueue)
 
-import Data.Aeson as JSON ((.:))
-import qualified Data.Aeson as JSON
-import qualified Data.Aeson.Types as JSON (Parser, parseEither)
+import           Data.Aeson          as JSON ((.:))
+import qualified Data.Aeson          as JSON
+import qualified Data.Aeson.Types    as JSON (Parser, parseEither)
 import qualified Data.HashMap.Strict as HashMap
 
 import qualified Data.Text as Text

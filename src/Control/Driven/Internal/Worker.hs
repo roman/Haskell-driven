@@ -1,17 +1,17 @@
+{-# LANGUAGE NoImplicitPrelude   #-}
+{-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 module Control.Driven.Internal.Worker where
 
 import Protolude
 
 import Control.Concurrent.Async (async, cancel)
-import Control.Concurrent.QSemN (newQSemN, waitQSemN, signalQSemN)
-import Data.HashMap.Strict (HashMap)
+import Control.Concurrent.QSemN (newQSemN, signalQSemN, waitQSemN)
+import Data.HashMap.Strict      (HashMap)
 
-import qualified Data.Text.Encoding as Text (decodeUtf8)
+import qualified Data.Aeson          as JSON
 import qualified Data.HashMap.Strict as HashMap
-import qualified Data.Aeson as JSON
+import qualified Data.Text.Encoding  as Text (decodeUtf8)
 
 import Control.Driven.Internal.Types
 

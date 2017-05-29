@@ -1,16 +1,16 @@
-{-# LANGUAGE OverloadedLists #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedLists   #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Control.Driven.Internal.Core where
 
 import Protolude
 
-import Data.HashMap.Strict (HashMap)
+import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 
-import Control.Driven.Internal.Types
-import Control.Driven.Internal.Worker
 import qualified Control.Driven.Internal.Backend.Memory as Backend
+import           Control.Driven.Internal.Types
+import           Control.Driven.Internal.Worker
 
 --------------------------------------------------------------------------------
 

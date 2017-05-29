@@ -1,34 +1,43 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE UndecidableSuperClasses #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE KindSignatures #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE DataKinds                 #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE GADTs                     #-}
+{-# LANGUAGE KindSignatures            #-}
+{-# LANGUAGE MultiParamTypeClasses     #-}
+{-# LANGUAGE TypeFamilies              #-}
+{-# LANGUAGE UndecidableInstances      #-}
+{-# LANGUAGE UndecidableSuperClasses   #-}
 
+{-# LANGUAGE DeriveGeneric             #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE NoImplicitPrelude         #-}
+{-# LANGUAGE OverloadedStrings         #-}
 module Control.Driven.Internal.Types where
 
 import Protolude
 
-import Data.Aeson ((.:))
+import Data.Aeson          ((.:))
 import Data.HashMap.Strict (HashMap)
 
 import Data.Text (isSuffixOf)
 
-import qualified Data.Text as Text
-import qualified Data.HashMap.Strict as HashMap
-import qualified Data.ByteString as BS
+import qualified Data.Aeson           as JSON
+import qualified Data.Aeson.Types     as JSON
+    ( Parser
+    , camelTo2
+    , constructorTagModifier
+    , defaultTaggedObject
+    , fieldLabelModifier
+    , sumEncoding
+    , tagFieldName
+    , typeMismatch
+    )
+import qualified Data.ByteString      as BS
 import qualified Data.ByteString.Lazy as LBS
-import qualified Data.Aeson as JSON
-import qualified Data.Aeson.Types as JSON (Parser, camelTo2, constructorTagModifier, typeMismatch, fieldLabelModifier, defaultTaggedObject, tagFieldName, sumEncoding)
-import qualified Data.ProtoLens as Proto (Message, encodeMessage, decodeMessage)
-import qualified JSONSchema.Draft4 as D4
+import qualified Data.HashMap.Strict  as HashMap
+import qualified Data.ProtoLens       as Proto (Message, decodeMessage, encodeMessage)
+import qualified Data.Text            as Text
+import qualified JSONSchema.Draft4    as D4
 
 --------------------------------------------------------------------------------
 
@@ -58,9 +67,9 @@ data SchemaSpec
 
 data EventSpec
   = EventSpec
-    { esSchema       :: SchemaSpec
-    , esWorkerSpecs  :: [WorkerSpec]
-    , esOutputNames  :: [OutputName]
+    { esSchema      :: SchemaSpec
+    , esWorkerSpecs :: [WorkerSpec]
+    , esOutputNames :: [OutputName]
     }
   deriving (Generic, Show, Eq)
 
@@ -75,10 +84,10 @@ data InputSpec
 
 data OutputSpec
   = OutputSpec
-    { osName          :: OutputName
-    , osBackendName   :: BackendName
-    , osObject        :: HashMap Text JSON.Value
-    , osDrivenObject  :: HashMap Text JSON.Value
+    { osName         :: OutputName
+    , osBackendName  :: BackendName
+    , osObject       :: HashMap Text JSON.Value
+    , osDrivenObject :: HashMap Text JSON.Value
     }
   deriving (Generic, Show, Eq)
 
@@ -124,9 +133,9 @@ data DrivenEvent
   | EventReceived { deInputName :: InputName, deEventName :: EventName, deFormatName :: FormatName }
   | InvalidEntryIgnored
       {
-        deInputName :: InputName
-      , deEventName :: EventName
-      , deFormatName :: FormatName
+        deInputName    :: InputName
+      , deEventName    :: EventName
+      , deFormatName   :: FormatName
       , deEventPayload :: EventPayload
       }
   | EventFormatMissconfigured { deInputName :: InputName, deEventName :: EventName }
@@ -164,9 +173,9 @@ data SSchema (s :: Schema) where
 data Input
   = Input
     {
-      readFromInput   :: IO (ByteString, IO ())
-    , writeToInput    :: ByteString -> IO ()
-    , disposeInput    :: IO ()
+      readFromInput :: IO (ByteString, IO ())
+    , writeToInput  :: ByteString -> IO ()
+    , disposeInput  :: IO ()
     }
 
 data Output

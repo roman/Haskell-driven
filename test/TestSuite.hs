@@ -2,11 +2,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 import Protolude
 
-import Test.Tasty (TestTree, defaultMainWithIngredients, testGroup)
-import Test.Tasty.HUnit (Assertion, (@?=), testCase)
-import Test.Tasty.SmallCheck (testProperty)
-import Test.Tasty.Runners (listingTests, consoleTestReporter)
+import Test.Tasty                   (TestTree, defaultMainWithIngredients, testGroup)
+import Test.Tasty.HUnit             (Assertion, testCase, (@?=))
 import Test.Tasty.Ingredients.Rerun (rerunningTests)
+import Test.Tasty.Runners           (consoleTestReporter, listingTests)
+import Test.Tasty.SmallCheck        (testProperty)
 
 import Lib (inc)
 
