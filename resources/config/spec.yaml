@@ -25,7 +25,7 @@ events:
     - mem_topic_validated
 
   message_queued:
-    schema: resources/private/schema/json/message_queued_v1.0.json
+    schema: protobuffer
     workers:
     - input: mem_message_queued
       timeout_ms: 3000

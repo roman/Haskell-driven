@@ -17,28 +17,36 @@ import qualified Data.HashMap.Strict as HashMap
 import qualified Data.Aeson as JSON
 import qualified Data.Yaml as YAML
 
+import Proto.MessageQueuedV10 (MessageQueued(..))
+
 import Config
 import Core
 
 --------------------------------------------------------------------------------
 
-data MessageQueued
-  = MessageQueued { mqMessageId :: Text }
-  deriving (Generic, JSON.FromJSON)
+instance IEvent MessageQueued where
+  eventName = const "message_queued"
 
-
-data MessageReceived
-  = MessageReceived { mrMessageId :: Text }
-  deriving (Generic, JSON.FromJSON, JSON.ToJSON)
-
-instance IEvent MessageReceived where
-  eventName _ = "message_queued"
-
-handleMessageReceived :: Msg MessageReceived -> IO [SomeOutputEvent]
-handleMessageReceived (Msg deleteMsg (MessageReceived msgId)) = do
-  putStrLn $ "message_queued " <> msgId
+handleMessageReceived :: Msg MessageQueued -> IO [SomeOutputEvent]
+handleMessageReceived (Msg deleteMsg m@(MessageQueued {})) = do
+  print m
   deleteMsg
   return [json $ TopicValidated "abc-123"]
+
+--------------------------------------------------------------------------------
+
+-- data MessageReceived
+--   = MessageReceived { mrMessageId :: Text }
+--   deriving (Generic, JSON.FromJSON, JSON.ToJSON)
+
+-- instance IEvent MessageReceived where
+--   eventName _ = "message_queued"
+
+-- handleMessageReceived :: Msg MessageReceived -> IO [SomeOutputEvent]
+-- handleMessageReceived (Msg deleteMsg (MessageReceived msgId)) = do
+--   putStrLn $ "message_queued " <> msgId
+--   deleteMsg
+--   return [json $ TopicValidated "abc-123"]
 
 --------------------
 
@@ -70,13 +78,14 @@ main = do
           drivenConfig
           (putStrLn . JSON.encode)
           []
-          [ ("message_queued", [jsonHandler handleMessageReceived])
+          [ ("message_queued",  [protoHandler handleMessageReceived])
           , ("topic_validated", [jsonHandler handleTopicValidated]) ]
       case HashMap.lookup "mem_message_queued" (runtimeInputs drivenRuntime) of
         Nothing ->
           putStrLn ("runtimeInputs doesn't have defined input" :: Text)
         Just input -> do
-          writeToInput input "{\"mrMessageId\": \"abc-123\"}"
+          -- writeToInput input "{\"mrMessageId\": \"abc-123\"}"
+          writeToInput input (toProtobuff $ MessageQueued "hello" [])
 
       threadDelay 5000000
       stopSystem drivenRuntime
