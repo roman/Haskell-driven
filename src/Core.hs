@@ -12,12 +12,17 @@ import Config
 import qualified IO.Memory as Backend
 import Worker
 
+--------------------------------------------------------------------------------
+
 data DrivenRuntime
   = DrivenRuntime
     {
-      runtimeInputs :: HashMap InputName Input
+      runtimeInputs       :: HashMap InputName Input
+    , runtimeOutputs      :: HashMap OutputName Output
     , runtimeEventWorkers :: HashMap EventName [Worker]
     }
+
+--------------------------------------------------------------------------------
 
 collectOutputsPerEventName
   :: HashMap EventName EventSpec
@@ -36,56 +41,94 @@ collectOutputsPerEventName allEvents allOutputs =
   in
     foldM step HashMap.empty (HashMap.toList allEvents)
 
+
+createOutputMap
+  :: DrivenConfig
+  -> (DrivenEvent -> IO ())
+  -> HashMap BackendName Backend
+  -> HashMap InputName Input
+  -> IO (HashMap OutputName Output)
+createOutputMap drivenConfig emitEvent backendMap inputMap =
+  let
+    step acc outputSpec =
+      case HashMap.lookup (osBackendName outputSpec) backendMap of
+        Nothing ->
+          throwIO $ BackendNameNotFound (osBackendName outputSpec)
+        Just backend -> do
+          output <- createOutput backend emitEvent inputMap outputSpec
+          return $ HashMap.insert (osName outputSpec) output acc
+  in
+    foldM step HashMap.empty (drivenOutputs drivenConfig)
+
+
+createInputMap
+  :: DrivenConfig
+  -> (DrivenEvent -> IO ())
+  -> HashMap BackendName Backend
+  -> IO (HashMap BackendName Input)
+createInputMap drivenConfig emitEvent backendMap =
+  let
+    step acc inputSpec =
+      case HashMap.lookup (isBackendName inputSpec) backendMap of
+        Nothing ->
+          throwIO $ BackendNameNotFound (isBackendName inputSpec)
+        Just backend -> do
+          input <- createInput backend emitEvent inputSpec
+          return $ HashMap.insert (isName inputSpec) input acc
+  in
+    foldM step HashMap.empty (drivenInputs drivenConfig)
+
+
+createWorkersPerEvent
+  :: DrivenConfig
+  -> (DrivenEvent -> IO ())
+  -> HashMap InputName Input
+  -> HashMap EventName (EventSpec, [Output])
+  -> HashMap EventName [SomeEventHandler]
+  -> IO (HashMap EventName [Worker])
+createWorkersPerEvent drivenConfig emitEvent inputMap outputPerEvent eventHandlers =
+  let
+    createWorker' evName evSpec =
+          createWorker
+            emitEvent
+            evName
+            evSpec
+            inputMap
+            outputPerEvent
+            (workerHandler eventHandlers)
+  in do
+    workersPerEventList <-
+      forM (HashMap.toList $ drivenEvents drivenConfig) $ \(evName, evSpec) -> do
+        workers <- mapM (createWorker' evName evSpec) (esWorkerSpecs evSpec)
+        return (evName, workers)
+
+    return $ HashMap.fromList workersPerEventList
+
+
 startSystem
   :: DrivenConfig
+  -> (DrivenEvent -> IO ())
   -> HashMap Text Backend
   -> HashMap EventName [SomeEventHandler]
   -> IO DrivenRuntime
-startSystem drivenConfig backendMap0 eventHandlers =
+startSystem drivenConfig emitEvent backendMap0 eventHandlers =
   let
     backendMap =
-      HashMap.union backendMap0 [("memory_queue", Backend.memoryBackend)]
+      HashMap.union
+         backendMap0
+         [("memory_queue", Backend.memoryBackend)]
 
-    inputStep acc inputSpec =
-      case HashMap.lookup (isTypeName inputSpec) backendMap of
-        Nothing ->
-          -- TODO: input/output backend not found
-          error "pending"
-        Just backend -> do
-          input <- createInput backend inputSpec
-          return $ HashMap.insert (isName inputSpec) input acc
-
-    outputStep
-      :: HashMap InputName Input
-      -> HashMap OutputName Output
-      -> OutputSpec
-      -> IO (HashMap OutputName Output)
-    outputStep inputMap acc outputSpec = do
-      case HashMap.lookup (osTypeName outputSpec) backendMap of
-        Nothing ->
-          -- TODO: input/output backend not found
-          error "pending"
-        Just backend -> do
-          output <- createOutput backend inputMap outputSpec
-          return $ HashMap.insert (osName outputSpec) output acc
   in do
-    inputMap  <- foldM inputStep HashMap.empty (drivenInputs drivenConfig)
-    outputMap <- foldM (outputStep inputMap) HashMap.empty (drivenOutputs drivenConfig)
+    inputMap  <- createInputMap drivenConfig emitEvent backendMap
+    outputMap <- createOutputMap drivenConfig emitEvent backendMap inputMap
     outputPerEvent <- collectOutputsPerEventName (drivenEvents drivenConfig) outputMap
-    workersPerEventList <-
-      forM (HashMap.toList $ drivenEvents drivenConfig) $ \(evName, evSpec) -> do
-        workers <-
-          forM (esWorkerSpecs evSpec) $ \workerSpec ->
-            createWorker
-              (evName, evSpec)
-              workerSpec
-              inputMap
-              outputPerEvent
-              (workerHandler eventHandlers)
-        return (evName, workers)
+    workersPerEvent <-
+      createWorkersPerEvent drivenConfig emitEvent inputMap outputPerEvent eventHandlers
 
-    let
-      workersPerEvent =
-        HashMap.fromList workersPerEventList
+    return $ DrivenRuntime inputMap outputMap workersPerEvent
 
-    return $ DrivenRuntime inputMap workersPerEvent
+stopSystem :: DrivenRuntime -> IO ()
+stopSystem (DrivenRuntime inputMap outputMap workersPerEvent) = do
+  mapM_ disposeInput (HashMap.elems inputMap)
+  mapM_ disposeOutput (HashMap.elems outputMap)
+  mapM_ (mapM_ disposeWorker) (HashMap.elems workersPerEvent)

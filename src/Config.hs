@@ -26,7 +26,7 @@ import qualified Data.HashMap.Strict as HashMap
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Aeson as JSON
-import qualified Data.Aeson.Types as JSON (Parser, typeMismatch)
+import qualified Data.Aeson.Types as JSON (Parser, camelTo2, constructorTagModifier, typeMismatch, fieldLabelModifier, defaultTaggedObject, tagFieldName, sumEncoding)
 import qualified Data.ProtoLens as Proto (Message, encodeMessage, decodeMessage)
 import qualified JSONSchema.Draft4 as D4
 
@@ -39,6 +39,9 @@ type OutputName = Text
 type EventName = Text
 type TypeName = Text
 type ErrorMessage = Text
+type BackendName = Text
+type FormatName = Text
+type EventPayload = Text
 
 data WorkerSpec
   = WorkerSpec
@@ -63,8 +66,8 @@ data EventSpec
 
 data InputSpec
   = InputSpec
-    { isName         :: Text
-    , isTypeName     :: TypeName
+    { isName         :: InputName
+    , isBackendName  :: BackendName
     , isObject       :: HashMap Text JSON.Value
     , isDrivenObject :: HashMap Text JSON.Value
     }
@@ -72,8 +75,8 @@ data InputSpec
 
 data OutputSpec
   = OutputSpec
-    { osName          :: Text
-    , osTypeName      :: TypeName
+    { osName          :: OutputName
+    , osBackendName   :: BackendName
     , osObject        :: HashMap Text JSON.Value
     , osDrivenObject  :: HashMap Text JSON.Value
     }
@@ -106,9 +109,47 @@ data DrivenError
   | OutputNameNotFound EventName OutputName
   | InputCreationError InputSpec ErrorMessage
   | OutputCreationError OutputSpec ErrorMessage
+  | BackendNameNotFound BackendName
   deriving (Generic, Show)
 
 instance Exception DrivenError
+
+data DrivenEvent
+  = InputCreated { deBackendName :: BackendName, deInputName :: InputName }
+  | InputDisposed { deBackendName :: BackendName, deInputName :: InputName }
+  | OutputCreated { deBackendName :: BackendName, deOutputName :: OutputName }
+  | OutputDisposed { deBackendName :: BackendName, deOutputName :: OutputName }
+  | EventWorkerCreated { deInputName :: InputName, deEventName :: EventName }
+  | EventWorkerDisposed { deInputName :: InputName, deEventName :: EventName }
+  | EventReceived { deInputName :: InputName, deEventName :: EventName, deFormatName :: FormatName }
+  | InvalidEntryIgnored
+      {
+        deInputName :: InputName
+      , deEventName :: EventName
+      , deFormatName :: FormatName
+      , deEventPayload :: EventPayload
+      }
+  | EventFormatMissconfigured { deInputName :: InputName, deEventName :: EventName }
+  | EventHandlerMissconfigured { deInputName :: InputName, deEventName :: EventName }
+  | EventHandlerFailed { deInputName :: InputName, deEventName :: EventName, deMessage :: ErrorMessage }
+  deriving (Generic, Show)
+
+
+drivenEventLabelModifier :: [Char] -> [Char]
+drivenEventLabelModifier =
+  JSON.camelTo2 '_' . drop 2
+
+instance JSON.ToJSON DrivenEvent where
+  toEncoding =
+    let
+      options =
+        JSON.defaultOptions {
+          JSON.fieldLabelModifier = drivenEventLabelModifier
+        , JSON.constructorTagModifier = JSON.camelTo2 '_'
+        , JSON.sumEncoding = (JSON.defaultTaggedObject { JSON.tagFieldName = "type" })
+        }
+    in
+      JSON.genericToEncoding options
 
 --------------------
 
@@ -125,23 +166,34 @@ data Input
     {
       readFromInput   :: IO (ByteString, IO ())
     , writeToInput    :: ByteString -> IO ()
+    , disposeInput    :: IO ()
     }
 
 data Output
   = Output
-    { writeToOutput :: ByteString -> IO () }
+    { writeToOutput :: ByteString -> IO ()
+    , disposeOutput :: IO () }
 
 data
   Backend
   = Backend {
-      createInput  :: InputSpec -> IO Input
-    , createOutput :: HashMap InputName Input -> OutputSpec -> IO Output
+      createInput
+        :: (DrivenEvent -> IO ())
+        -> InputSpec
+        -> IO Input
+    , createOutput
+        :: (DrivenEvent -> IO ())
+        -> HashMap InputName Input
+        -> OutputSpec
+        -> IO Output
     }
 
 data WorkerEnv
   = WorkerEnv {
     weEventSpec :: (EventName, EventSpec)
   , weOutputs   :: HashMap EventName (EventSpec, [Output])
+  , weInputName :: InputName
+  , weEmitEvent :: DrivenEvent -> IO ()
   }
 
 data WorkerMsg
@@ -154,7 +206,7 @@ data WorkerMsg
 
 data Worker
   = Worker
-    { cancelWorker  :: IO () }
+    { disposeWorker :: IO () }
 
 --------------------------------------------------------------------------------
 
@@ -189,7 +241,7 @@ parseWorkerSpec value =
       <*> workerObj .: "timeout_ms"
       <*> workerObj .: "count"
     _ ->
-      JSON.typeMismatch "Paseo.WorkerSpec" value
+      JSON.typeMismatch "Driven.WorkerSpec" value
 
 instance JSON.FromJSON WorkerSpec where
   parseJSON =

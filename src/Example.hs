@@ -63,17 +63,20 @@ main = do
   fileResult <- YAML.decodeFileEither "./resources/config/spec.yaml"
   case fileResult of
     Left err ->
-      error (show err)
+      print err
     Right drivenConfig -> do
       drivenRuntime <-
         startSystem
           drivenConfig
+          (putStrLn . JSON.encode)
           []
           [ ("message_queued", [jsonHandler handleMessageReceived])
           , ("topic_validated", [jsonHandler handleTopicValidated]) ]
       case HashMap.lookup "mem_message_queued" (runtimeInputs drivenRuntime) of
         Nothing ->
-          putStrLn ("wtf" :: Text)
+          putStrLn ("runtimeInputs doesn't have defined input" :: Text)
         Just input -> do
-          putStrLn ("fuubar" :: Text)
           writeToInput input "{\"mrMessageId\": \"abc-123\"}"
+
+      threadDelay 5000000
+      stopSystem drivenRuntime
