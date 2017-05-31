@@ -19,7 +19,7 @@ fetchWorkerInputSource
   :: WorkerSpec
   -> HashMap InputName Input
   -> IO Input
-fetchWorkerInputSource workerSpec allInputs =
+fetchWorkerInputSource workerSpec inputMap =
   let
     inputName =
       wsInputName workerSpec
@@ -27,19 +27,17 @@ fetchWorkerInputSource workerSpec allInputs =
   in
     maybe (throwIO $ InputNameNotFound inputName)
           return
-          (HashMap.lookup inputName allInputs)
+          (HashMap.lookup inputName inputMap)
 
 workerHandler
-  :: HashMap EventName [SomeEventHandler]
+  :: HashMap EventName Schema
+  -> HashMap EventName [SomeEventHandler]
   -> WorkerMsg
   -> IO ()
-workerHandler eventHandlerMap (WorkerMsg env payload deleteMsg) =
+workerHandler schemaMap eventHandlerMap (WorkerMsg env inputBytes deleteMsg) =
   let
     evName =
       fst $ weEventSpec env
-
-    evSchema =
-      esSchema $ snd $ weEventSpec env
 
     inputName =
       weInputName env
@@ -47,70 +45,65 @@ workerHandler eventHandlerMap (WorkerMsg env payload deleteMsg) =
     outputMap =
       weOutputs env
 
-    handleEvent
-      :: SomeEventHandler
-      -> IO [SomeOutputEvent]
-    handleEvent someHandler =
-      case (evSchema, someHandler) of
-        (JsonSchema {}, JsonEventHandler handler) -> do
-          weEmitEvent env (EventReceived inputName evName "json")
-          case JSON.decodeStrict payload of
-            Nothing -> do
-              weEmitEvent
-                env
-                (InvalidEntryIgnored inputName evName "json" $ Text.decodeUtf8 payload)
-              return []
-            Just decodedPayload -> do
-              eResult <- try $ handler (Msg deleteMsg decodedPayload)
-              case eResult of
-                Right result ->
-                  return result
-                Left (err :: SomeException) -> do
-                  weEmitEvent env $ EventHandlerFailed inputName evName (show err)
-                  return []
+    emitOutputEvent outputEvent =
+      let
+        mSchema =
+          HashMap.lookup evName schemaMap
 
-        (Protobuffer, ProtoEventHandler handler) -> do
-          weEmitEvent env (EventReceived inputName evName "protobuffer")
-          case fromProtobuff payload of
-            Nothing -> do
-              weEmitEvent
-                env
-                (InvalidEntryIgnored inputName evName "protobuffer" "<redacted>")
-              return []
+        mOutputs =
+          HashMap.lookup evName outputMap
 
-            Just decodedPayload -> do
-              eResult <- try $ handler (Msg deleteMsg decodedPayload)
-              case eResult of
-                Right result ->
-                  return result
-                Left (err :: SomeException) -> do
-                  weEmitEvent env $ EventHandlerFailed inputName evName (show err)
-                  return []
+      in case (mSchema, mOutputs) of
+        (Nothing, _) ->
+          weEmitDrivenEvent env (EventSchemaMissconfigured evName)
 
-        _ -> do
-          weEmitEvent env $ EventFormatMissconfigured (weInputName env) evName
-          return []
+        (_, Nothing) ->
+          weEmitDrivenEvent env (EventOutputMissconfigured evName)
+
+        (Just checkSchema, Just (_, outputList)) ->
+          let
+            outputBytes =
+              serializeEvent outputEvent
+
+          in
+            case checkSchema outputBytes of
+              Left err ->
+                weEmitDrivenEvent env (EventSchemaMissmatch evName (show err))
+
+              Right _ ->
+                mapM_ (`writeToOutput` outputBytes) outputList
+
+    runEventHandler :: SomeEventHandler -> IO ()
+    runEventHandler someHandler = do
+      weEmitDrivenEvent env (EventReceived inputName evName (handlerTypeName someHandler))
+      handlerResult <- try $ handleEvent someHandler inputBytes
+      case handlerResult of
+        Left (err :: SomeException) -> do
+          weEmitDrivenEvent env (EventHandlerFailed inputName evName $ show err)
+
+        Right outputEventList -> do
+          mapM_ emitOutputEvent outputEventList
+          deleteMsg
 
   in
     case HashMap.lookup evName eventHandlerMap of
       Nothing ->
-        weEmitEvent env $ EventHandlerMissconfigured (weInputName env) evName
+        weEmitDrivenEvent env $ EventHandlerMissconfigured (weInputName env) evName
+
       Just handlers ->
-        forM_ handlers $ \handler -> do
-          outputEvents <- handleEvent handler
-          mapM_ (_emitEvent outputMap) outputEvents
+        mapM_ runEventHandler handlers
 
 createWorker
   :: (DrivenEvent -> IO ())
   -> EventName
   -> EventSpec
+  -> WorkerSpec
   -> HashMap InputName Input
   -> HashMap EventName (EventSpec, [Output])
   -> (WorkerMsg -> IO ())
-  -> WorkerSpec
   -> IO Worker
-createWorker emitEvent evName evSpec allInputs outputsPerEvent msgHandler workerSpec = do
-  evInputSource <- fetchWorkerInputSource workerSpec allInputs
+createWorker emitDrivenEvent evName evSpec workerSpec inputMap outputsPerEvent msgHandler = do
+  evInputSource <- fetchWorkerInputSource workerSpec inputMap
 
   let
     inputName =
@@ -121,29 +114,29 @@ createWorker emitEvent evName evSpec allInputs outputsPerEvent msgHandler worker
         weEventSpec = (evName, evSpec)
       , weOutputs   = outputsPerEvent
       , weInputName = inputName
-      , weEmitEvent = emitEvent
+      , weEmitDrivenEvent = emitDrivenEvent
       }
 
     callHandler = do
-      (message, deleteMessage) <- readFromInput evInputSource
+      (message, deleteMsg) <- readFromInput evInputSource
       async $ do
         let
           workerMsg =
             WorkerMsg {
               wmWorkerEnv = workerEnv
             , wmPayload = message
-            , wmDeleteMsg = deleteMessage
+            , wmDeleteMsg = deleteMsg
             }
         msgHandler workerMsg
 
     cleanupWorker worker = do
-      emitEvent (EventWorkerDisposed inputName evName)
+      emitDrivenEvent (EventWorkerDisposed inputName evName)
       cancel worker
 
   workerSemaphore <- newQSemN (wsCount workerSpec)
   workerLoop <-
     async $ do
-      emitEvent (EventWorkerCreated evName inputName)
+      emitDrivenEvent (EventWorkerCreated evName inputName)
       forever $ do
         waitQSemN workerSemaphore 1
         callHandler `finally` signalQSemN workerSemaphore 1

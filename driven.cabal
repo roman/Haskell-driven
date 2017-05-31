@@ -32,6 +32,7 @@ library
   other-modules:     Control.Driven.Internal.Types
                    , Control.Driven.Internal.Worker
                    , Control.Driven.Internal.Backend.Memory
+                   , Exp
   build-depends:     base >= 4.8 && < 5
                    , protolude
                    --
@@ -44,6 +45,7 @@ library
                    --
                    , aeson
                    , hjsonschema
+                   , transformers
                    --
                    , proto-lens >=0.2 && <0.3
                    , lens-family >=1.2 && <1.3

@@ -19,8 +19,6 @@ import Protolude
 import Data.Aeson          ((.:))
 import Data.HashMap.Strict (HashMap)
 
-import Data.Text (isSuffixOf)
-
 import qualified Data.Aeson           as JSON
 import qualified Data.Aeson.Types     as JSON
     ( Parser
@@ -32,12 +30,7 @@ import qualified Data.Aeson.Types     as JSON
     , tagFieldName
     , typeMismatch
     )
-import qualified Data.ByteString      as BS
-import qualified Data.ByteString.Lazy as LBS
-import qualified Data.HashMap.Strict  as HashMap
 import qualified Data.ProtoLens       as Proto (Message, decodeMessage, encodeMessage)
-import qualified Data.Text            as Text
-import qualified JSONSchema.Draft4    as D4
 
 --------------------------------------------------------------------------------
 
@@ -60,14 +53,9 @@ data WorkerSpec
     }
   deriving (Generic, Show, Eq)
 
-data SchemaSpec
-  = JsonSchema { schemaUri :: Text }
-  | Protobuffer
-  deriving (Generic, Show, Eq)
-
 data EventSpec
   = EventSpec
-    { esSchema      :: SchemaSpec
+    { esSchema      :: JSON.Value
     , esWorkerSpecs :: [WorkerSpec]
     , esOutputNames :: [OutputName]
     }
@@ -118,6 +106,7 @@ data DrivenError
   | OutputNameNotFound EventName OutputName
   | InputCreationError InputSpec ErrorMessage
   | OutputCreationError OutputSpec ErrorMessage
+  | SchemaForEventNotFound EventName JSON.Value
   | BackendNameNotFound BackendName
   deriving (Generic, Show)
 
@@ -128,19 +117,33 @@ data DrivenEvent
   | InputDisposed { deBackendName :: BackendName, deInputName :: InputName }
   | OutputCreated { deBackendName :: BackendName, deOutputName :: OutputName }
   | OutputDisposed { deBackendName :: BackendName, deOutputName :: OutputName }
+  | EventOutputMissconfigured { deEventName :: EventName }
+  | EventSchemaMissconfigured { deEventName :: EventName }
   | EventWorkerCreated { deInputName :: InputName, deEventName :: EventName }
   | EventWorkerDisposed { deInputName :: InputName, deEventName :: EventName }
   | EventReceived { deInputName :: InputName, deEventName :: EventName, deFormatName :: FormatName }
   | InvalidEntryIgnored
-      {
-        deInputName    :: InputName
+      { deInputName    :: InputName
       , deEventName    :: EventName
       , deFormatName   :: FormatName
       , deEventPayload :: EventPayload
       }
   | EventFormatMissconfigured { deInputName :: InputName, deEventName :: EventName }
   | EventHandlerMissconfigured { deInputName :: InputName, deEventName :: EventName }
-  | EventHandlerFailed { deInputName :: InputName, deEventName :: EventName, deMessage :: ErrorMessage }
+  | EventHandlerFailed
+    { deInputName :: InputName
+    , deEventName :: EventName
+    , deMessage :: ErrorMessage
+    }
+  | EventSerializerMissconfigured
+    { deEventName :: EventName
+    , deCodeSchema :: Text
+    , deConfiguredSchema :: Text
+    }
+  | EventSchemaMissmatch
+    { deEventName :: EventName
+    , deSchema    :: Text
+    }
   deriving (Generic, Show)
 
 
@@ -167,14 +170,6 @@ instance JSON.ToJSON DrivenEvent where
 
 --------------------
 
-data Schema
-  = Json
-  | Proto
-
-data SSchema (s :: Schema) where
-  SJson  :: SSchema 'Json
-  SProto :: SSchema 'Proto
-
 data Input
   = Input
     {
@@ -187,6 +182,14 @@ data Output
   = Output
     { writeToOutput :: ByteString -> IO ()
     , disposeOutput :: IO () }
+
+data Event
+  = Event
+    {
+      evSpec    :: EventSpec
+    , evOutputs :: [Output]
+    , evSchema  :: Schema
+    }
 
 data
   Backend
@@ -207,7 +210,7 @@ data WorkerEnv
     weEventSpec :: (EventName, EventSpec)
   , weOutputs   :: HashMap EventName (EventSpec, [Output])
   , weInputName :: InputName
-  , weEmitEvent :: DrivenEvent -> IO ()
+  , weEmitDrivenEvent :: DrivenEvent -> IO ()
   }
 
 data WorkerMsg
@@ -224,25 +227,15 @@ newtype Worker
 
 --------------------------------------------------------------------------------
 
-parseSchemaSpec
-  :: JSON.Value
-  -> JSON.Parser SchemaSpec
-parseSchemaSpec value =
-  case value of
-    JSON.String schemaName
-      | ".json" `isSuffixOf` schemaName ->
-        return (JsonSchema schemaName)
-      | schemaName == "protobuffer" ->
-        return Protobuffer
-      | otherwise ->
-        JSON.typeMismatch "Driven.SchemaSpec" value
-
-    _ ->
-      JSON.typeMismatch "Driven.SchemaSpec" value
-
-instance JSON.FromJSON SchemaSpec where
-  parseJSON =
-    parseSchemaSpec
+-- parseSchemaSpec
+--   :: JSON.Value
+--   -> JSON.Parser (HashMap Text JSON.Value)
+-- parseSchemaSpec value =
+--   case value of
+--     JSON.Object object ->
+--       return object
+--     _ ->
+--       JSON.typeMismatch "Driven.SchemaSpec" value
 
 parseWorkerSpec
   :: JSON.Value
@@ -319,91 +312,46 @@ instance Proto.Message msg => ToProtobuff msg where
 
 --------------------
 
-data Msg a
-  = Msg { msgDelete  :: IO ()
-        , msgPayload :: a }
+class IOutputEvent event where
+  eventName :: event -> Text
 
-data SomeOutputEvent
-  = forall ev. (IEvent ev, JSON.ToJSON ev) =>
-    JsonOutputEvent ev
-  | forall ev. (IEvent ev, ToProtobuff ev) =>
-    ProtoOutputEvent ev
+class IOutputEvent serializer => IOutputSerializer serializer where
+  serializeEvent :: serializer -> ByteString
 
-json :: (IEvent ev, JSON.ToJSON ev) => ev -> SomeOutputEvent
-json = JsonOutputEvent
+data SomeOutputEvent =
+  forall event. IOutputSerializer event
+    => SomeOutputEvent event
 
-proto :: (IEvent ev, ToProtobuff ev) => ev -> SomeOutputEvent
-proto = ProtoOutputEvent
+instance IOutputEvent SomeOutputEvent where
+  eventName (SomeOutputEvent event) =
+    eventName event
 
-class IEvent ev where
-  eventName :: ev -> Text
-
-instance IEvent SomeOutputEvent where
-  eventName (JsonOutputEvent ev) =
-    eventName ev
-  eventName (ProtoOutputEvent ev) =
-    eventName ev
-
-_emitEvent
-  :: HashMap EventName (EventSpec, [Output])
-  -> SomeOutputEvent
-  -> IO ()
-_emitEvent outputMap someEvent =
-    case HashMap.lookup (eventName someEvent) outputMap of
-      Nothing ->
-        return ()
-      Just (eventSpec, outputs)  ->
-        case (someEvent, esSchema eventSpec) of
-          (JsonOutputEvent event, JsonSchema jsonSchemaPath) ->
-            let
-              eventJson =
-                JSON.toJSON event
-
-            in do
-              schemaJson <-
-                (fromMaybe (panic "Invalid JSON format on schema") . JSON.decodeStrict)
-                <$> BS.readFile (Text.unpack jsonSchemaPath)
-              result <-
-                D4.fetchHTTPAndValidate (D4.SchemaWithURI schemaJson Nothing)
-                                        eventJson
-
-              case result of
-                Left _ ->
-                  -- TODO: Change this to a logger
-                  putStrLn ("JSON serialization doesn't comply with JSON schema" :: Text)
-                Right _ ->
-                  mapM_ (`writeToOutput` LBS.toStrict (JSON.encode eventJson))
-                        outputs
-
-          (ProtoOutputEvent event, Protobuffer) ->
-            let
-              serializedOutput =
-                toProtobuff event
-            in
-              mapM_ (`writeToOutput` serializedOutput) outputs
-
-          (_codeConstraint, configConstraint) ->
-            putStrLn
-              $ "ERROR: Expecting " <> show configConstraint
-              <> (" but got different constraint on code" :: Text)
+instance IOutputSerializer SomeOutputEvent where
+  serializeEvent (SomeOutputEvent event) =
+    serializeEvent event
 
 --------------------
--- Event Handler (Input)
+
+class IEventHandler handler where
+  handlerTypeName :: handler -> Text
+  handleEvent :: handler -> ByteString -> IO [SomeOutputEvent]
 
 data SomeEventHandler
-  = forall ev. (JSON.FromJSON ev) =>
-    JsonEventHandler (Msg ev -> IO [SomeOutputEvent])
-  | forall ev. (FromProtobuff ev) =>
-    ProtoEventHandler (Msg ev -> IO [SomeOutputEvent])
+  = forall handler. IEventHandler handler => SomeEventHandler handler
 
-jsonHandler
-  :: (JSON.FromJSON ev)
-  => (Msg ev -> IO [SomeOutputEvent])
-  -> SomeEventHandler
-jsonHandler = JsonEventHandler
+instance IEventHandler SomeEventHandler where
+  handlerTypeName (SomeEventHandler handler) =
+    handlerTypeName handler
+  handleEvent (SomeEventHandler handler) inputBytes =
+    handleEvent handler inputBytes
 
-protoHandler
-  :: (FromProtobuff ev)
-  => (Msg ev -> IO [SomeOutputEvent])
-  -> SomeEventHandler
-protoHandler = ProtoEventHandler
+--------------------
+
+type SchemaName
+  = Text
+
+type Schema
+  = ByteString -> Either SomeException ()
+
+type SchemaSpec
+  = EventSpec -> IO (Maybe Schema)

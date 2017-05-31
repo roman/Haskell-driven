@@ -9,8 +9,9 @@ import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 
 import qualified Control.Driven.Internal.Backend.Memory as Backend
+-- import           Control.Driven.Internal.Worker
+
 import           Control.Driven.Internal.Types
-import           Control.Driven.Internal.Worker
 
 --------------------------------------------------------------------------------
 
@@ -28,7 +29,7 @@ collectOutputsPerEventName
   :: HashMap EventName EventSpec
   -> HashMap OutputName Output
   -> IO (HashMap EventName (EventSpec, [Output]))
-collectOutputsPerEventName allEvents allOutputs =
+collectOutputsPerEventName eventSpecMap allOutputs =
   let
     step acc (evName, eventSpec) = do
       outputs <-
@@ -39,16 +40,36 @@ collectOutputsPerEventName allEvents allOutputs =
       return $ HashMap.insert evName (eventSpec, outputs) acc
 
   in
-    foldM step HashMap.empty (HashMap.toList allEvents)
+    foldM step HashMap.empty (HashMap.toList eventSpecMap)
 
+createSchemaMap
+  :: [SchemaSpec]
+  -> HashMap EventName EventSpec
+  -> IO (HashMap EventName Schema)
+createSchemaMap schemaSpecList eventSpecMap  =
+  let
+    step acc (evName, eventSpec) = do
+      result0 <- mapM ($ eventSpec) schemaSpecList
+
+      let
+        result =
+          catMaybes result0
+
+      case result of
+        [] ->
+          throwIO $ SchemaForEventNotFound evName (esSchema eventSpec)
+        (schema:_) ->
+          return $ HashMap.insert evName schema acc
+  in
+    foldM step HashMap.empty (HashMap.toList eventSpecMap)
 
 createOutputMap
-  :: DrivenConfig
-  -> (DrivenEvent -> IO ())
+  :: (DrivenEvent -> IO ())
   -> HashMap BackendName Backend
   -> HashMap InputName Input
+  -> [OutputSpec]
   -> IO (HashMap OutputName Output)
-createOutputMap drivenConfig emitEvent backendMap inputMap =
+createOutputMap emitEvent backendMap inputMap outputSpecList =
   let
     step acc outputSpec =
       case HashMap.lookup (osBackendName outputSpec) backendMap of
@@ -58,15 +79,14 @@ createOutputMap drivenConfig emitEvent backendMap inputMap =
           output <- createOutput backend emitEvent inputMap outputSpec
           return $ HashMap.insert (osName outputSpec) output acc
   in
-    foldM step HashMap.empty (drivenOutputs drivenConfig)
-
+    foldM step HashMap.empty outputSpecList
 
 createInputMap
-  :: DrivenConfig
-  -> (DrivenEvent -> IO ())
+  :: (DrivenEvent -> IO ())
   -> HashMap BackendName Backend
+  -> [InputSpec]
   -> IO (HashMap BackendName Input)
-createInputMap drivenConfig emitEvent backendMap =
+createInputMap emitEvent backendMap inputSpecList =
   let
     step acc inputSpec =
       case HashMap.lookup (isBackendName inputSpec) backendMap of
@@ -76,17 +96,17 @@ createInputMap drivenConfig emitEvent backendMap =
           input <- createInput backend emitEvent inputSpec
           return $ HashMap.insert (isName inputSpec) input acc
   in
-    foldM step HashMap.empty (drivenInputs drivenConfig)
-
+    foldM step HashMap.empty inputSpecList
 
 createWorkersPerEvent
-  :: DrivenConfig
-  -> (DrivenEvent -> IO ())
+  :: (DrivenEvent -> IO ())
+  -> HashMap EventName EventSpec
+  -> HashMap EventName Schema
   -> HashMap InputName Input
   -> HashMap EventName (EventSpec, [Output])
   -> HashMap EventName [SomeEventHandler]
   -> IO (HashMap EventName [Worker])
-createWorkersPerEvent drivenConfig emitEvent inputMap outputPerEvent eventHandlers =
+createWorkersPerEvent emitEvent eventSpecMap schemaMap inputMap outputPerEvent eventHandlers =
   let
     createWorker' evName evSpec =
           createWorker
@@ -95,10 +115,10 @@ createWorkersPerEvent drivenConfig emitEvent inputMap outputPerEvent eventHandle
             evSpec
             inputMap
             outputPerEvent
-            (workerHandler eventHandlers)
+            (workerHandler schemaMap eventHandlers)
   in do
     workersPerEventList <-
-      forM (HashMap.toList $ drivenEvents drivenConfig) $ \(evName, evSpec) -> do
+      forM (HashMap.toList eventSpecMap) $ \(evName, evSpec) -> do
         workers <- mapM (createWorker' evName evSpec) (esWorkerSpecs evSpec)
         return (evName, workers)
 
@@ -109,26 +129,38 @@ startSystem
   :: DrivenConfig
   -> (DrivenEvent -> IO ())
   -> HashMap Text Backend
+  -> [SchemaSpec]
   -> HashMap EventName [SomeEventHandler]
   -> IO DrivenRuntime
-startSystem drivenConfig emitEvent backendMap0 eventHandlers =
+startSystem drivenConfig emitEvent backendMap0 schemaSpecList eventHandlers = do
   let
     backendMap =
       HashMap.union
          backendMap0
          [("memory_queue", Backend.memoryBackend)]
 
-  in do
-    inputMap  <- createInputMap drivenConfig emitEvent backendMap
-    outputMap <- createOutputMap drivenConfig emitEvent backendMap inputMap
-    outputPerEvent <- collectOutputsPerEventName (drivenEvents drivenConfig) outputMap
-    workersPerEvent <-
-      createWorkersPerEvent drivenConfig emitEvent inputMap outputPerEvent eventHandlers
+    inputSpecMap =
+      drivenInputs drivenConfig
 
-    return $ DrivenRuntime inputMap outputMap workersPerEvent
+    outputSpecMap =
+      drivenOutputs drivenConfig
 
-stopSystem :: DrivenRuntime -> IO ()
-stopSystem (DrivenRuntime inputMap outputMap workersPerEvent) = do
-  mapM_ disposeInput (HashMap.elems inputMap)
-  mapM_ disposeOutput (HashMap.elems outputMap)
-  mapM_ (mapM_ disposeWorker) (HashMap.elems workersPerEvent)
+    eventSpecMap =
+      drivenEvents drivenConfig
+
+  inputMap  <- createInputMap emitEvent backendMap inputSpecMap
+  outputMap <- createOutputMap emitEvent backendMap inputMap outputSpecMap
+  schemaMap <- createSchemaMap schemaSpecList eventSpecMap
+
+  outputPerEvent <- collectOutputsPerEventName eventSpecMap outputMap
+  workersPerEvent <-
+    createWorkersPerEvent emitEvent eventSpecMap schemaMap inputMap outputPerEvent eventHandlers
+
+  return $ DrivenRuntime inputMap outputMap workersPerEvent
+
+--
+-- stopSystem :: DrivenRuntime -> IO ()
+-- stopSystem (DrivenRuntime inputMap outputMap workersPerEvent) = do
+--   mapM_ disposeInput (HashMap.elems inputMap)
+--   mapM_ disposeOutput (HashMap.elems outputMap)
+--   mapM_ (mapM_ disposeWorker) (HashMap.elems workersPerEvent)
