@@ -11,11 +11,10 @@ import Data.Aeson ((.:))
 
 import qualified Data.Aeson       as JSON
 import qualified Data.Aeson.Types as JSON (Parser, parseEither, typeMismatch)
+import qualified Data.ProtoLens   as Proto (Message, decodeMessage, encodeMessage)
 import qualified Data.Text        as Text
-import qualified Data.ProtoLens                as Proto
-    (Message, decodeMessage, encodeMessage)
 
-import           Control.Driven.Types
+import Control.Driven.Types
 
 --------------------------------------------------------------------------------
 

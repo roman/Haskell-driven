@@ -8,7 +8,7 @@ import Protolude
 import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 
-import           Control.Driven.Internal.Worker
+import Control.Driven.Internal.Worker
 
 import Control.Driven.Internal.Types
 

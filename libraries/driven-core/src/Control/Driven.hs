@@ -6,6 +6,6 @@ module Control.Driven
   , module M
   ) where
 
-import Control.Driven.Types as T
-import Control.Driven.Internal.Core as C
 import Control.Driven.Backend.Memory as M
+import Control.Driven.Internal.Core  as C
+import Control.Driven.Types          as T
