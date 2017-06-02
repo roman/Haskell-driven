@@ -82,7 +82,7 @@ createOutputMap emitDrivenEvent inputMap backendList outputSpecList =
       case result of
         [] ->
           throwIO $ BackendNameNotFound (osName outputSpec)
-        (output:_) -> do
+        (output:_) ->
           return $ HashMap.insert (osName outputSpec) output acc
 
   in
@@ -107,7 +107,7 @@ createInputMap emitDrivenEvent backendList inputSpecList =
       case result of
         [] ->
           throwIO $ BackendNameNotFound (isName inputSpec)
-        (input:_) -> do
+        (input:_) ->
           return $ HashMap.insert (isName inputSpec) input acc
 
   in

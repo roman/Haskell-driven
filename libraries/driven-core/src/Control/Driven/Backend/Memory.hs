@@ -26,7 +26,7 @@ import Control.Driven.Internal.Types
 parseMemoryQueue
   :: HashMap Text JSON.Value
   -> JSON.Parser (Int, Int)
-parseMemoryQueue memoryQueueObj = do
+parseMemoryQueue memoryQueueObj =
   (,)
     <$> memoryQueueObj .: "max_size"
     <*> memoryQueueObj .: "retry_after_ms"
