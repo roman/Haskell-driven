@@ -5,3 +5,5 @@
   :END:
 - [ ] Add AWS backend project
 - [ ] Add tests
+- [ ] Revisit LANGUAGE Pragmas on top of files
+- [ ] Revisit dependencies and specify concrete ones
