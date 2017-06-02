@@ -8,7 +8,6 @@ import Protolude
 import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 
-import qualified Control.Driven.Internal.Backend.Memory as Backend
 import           Control.Driven.Internal.Worker
 
 import Control.Driven.Internal.Types
@@ -65,36 +64,52 @@ createSchemaMap schemaSpecList eventSpecMap  =
 
 createOutputMap
   :: (DrivenEvent -> IO ())
-  -> HashMap BackendName Backend
   -> HashMap InputName Input
+  -> [Backend]
   -> [OutputSpec]
   -> IO (HashMap OutputName Output)
-createOutputMap emitEvent backendMap inputMap outputSpecList =
+createOutputMap emitDrivenEvent inputMap backendList outputSpecList =
   let
-    step acc outputSpec =
-      case HashMap.lookup (osBackendName outputSpec) backendMap of
-        Nothing ->
-          throwIO $ BackendNameNotFound (osBackendName outputSpec)
-        Just backend -> do
-          output <- createOutput backend emitEvent inputMap outputSpec
+    step acc outputSpec = do
+      result0 <-
+        mapM (\backend -> createOutput backend emitDrivenEvent inputMap outputSpec)
+             backendList
+
+      let
+        result =
+          catMaybes result0
+
+      case result of
+        [] ->
+          throwIO $ BackendNameNotFound (osName outputSpec)
+        (output:_) -> do
           return $ HashMap.insert (osName outputSpec) output acc
+
   in
     foldM step HashMap.empty outputSpecList
 
 createInputMap
   :: (DrivenEvent -> IO ())
-  -> HashMap BackendName Backend
+  -> [Backend]
   -> [InputSpec]
   -> IO (HashMap BackendName Input)
-createInputMap emitEvent backendMap inputSpecList =
+createInputMap emitDrivenEvent backendList inputSpecList =
   let
-    step acc inputSpec =
-      case HashMap.lookup (isBackendName inputSpec) backendMap of
-        Nothing ->
-          throwIO $ BackendNameNotFound (isBackendName inputSpec)
-        Just backend -> do
-          input <- createInput backend emitEvent inputSpec
+    step acc inputSpec = do
+      result0 <-
+        mapM (\backend -> createInput backend emitDrivenEvent inputSpec)
+            backendList
+
+      let
+        result =
+          catMaybes result0
+
+      case result of
+        [] ->
+          throwIO $ BackendNameNotFound (isName inputSpec)
+        (input:_) -> do
           return $ HashMap.insert (isName inputSpec) input acc
+
   in
     foldM step HashMap.empty inputSpecList
 
@@ -106,11 +121,11 @@ createWorkersPerEvent
   -> HashMap EventName (EventSpec, [Output])
   -> HashMap EventName [SomeEventHandler]
   -> IO (HashMap EventName [Worker])
-createWorkersPerEvent emitEvent eventSpecMap schemaMap inputMap outputPerEvent eventHandlers =
+createWorkersPerEvent emitDrivenEvent eventSpecMap schemaMap inputMap outputPerEvent eventHandlers =
   let
     createWorker' evName evSpec workerSpec =
           createWorker
-            emitEvent
+            emitDrivenEvent
             evName
             evSpec
             workerSpec
@@ -128,16 +143,12 @@ createWorkersPerEvent emitEvent eventSpecMap schemaMap inputMap outputPerEvent e
 startSystem
   :: DrivenConfig
   -> (DrivenEvent -> IO ())
-  -> HashMap Text Backend
+  -> [Backend]
   -> [SchemaSpec]
   -> HashMap EventName [SomeEventHandler]
   -> IO DrivenRuntime
-startSystem drivenConfig emitEvent backendMap0 schemaSpecList eventHandlers = do
+startSystem drivenConfig emitDrivenEvent backendList schemaSpecList eventHandlers = do
   let
-    backendMap =
-      HashMap.union
-         backendMap0
-         [("memory_queue", Backend.memoryBackend)]
 
     inputSpecMap =
       drivenInputs drivenConfig
@@ -148,13 +159,13 @@ startSystem drivenConfig emitEvent backendMap0 schemaSpecList eventHandlers = do
     eventSpecMap =
       drivenEvents drivenConfig
 
-  inputMap  <- createInputMap emitEvent backendMap inputSpecMap
-  outputMap <- createOutputMap emitEvent backendMap inputMap outputSpecMap
+  inputMap  <- createInputMap emitDrivenEvent backendList inputSpecMap
+  outputMap <- createOutputMap emitDrivenEvent inputMap backendList outputSpecMap
   schemaMap <- createSchemaMap schemaSpecList eventSpecMap
 
   outputPerEvent <- collectOutputsPerEventName eventSpecMap outputMap
   workersPerEvent <-
-    createWorkersPerEvent emitEvent eventSpecMap schemaMap inputMap outputPerEvent eventHandlers
+    createWorkersPerEvent emitDrivenEvent eventSpecMap schemaMap inputMap outputPerEvent eventHandlers
 
   return $ DrivenRuntime inputMap outputMap workersPerEvent
 

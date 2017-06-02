@@ -103,7 +103,7 @@ data DrivenError
   | InputCreationError InputSpec ErrorMessage
   | OutputCreationError OutputSpec ErrorMessage
   | InvalidSchemaTypeForEvent EventName JSON.Value
-  | BackendNameNotFound BackendName
+  | BackendNameNotFound Text
   | EventHandlerInputParserFailed ErrorMessage
   deriving (Generic, Show)
 
@@ -188,37 +188,38 @@ data Input
 data Output
   = Output
     { writeToOutput :: ByteString -> IO ()
-    , disposeOutput :: IO () }
+    , disposeOutput :: IO ()
+    }
 
 data Event
   = Event
-    {
-      eSpec    :: EventSpec
+    { eSpec    :: EventSpec
     , eOutputs :: [Output]
     , eSchema  :: Schema
     }
 
-data
-  Backend
-  = Backend {
+data Backend
+  = Backend
+    {
       createInput
         :: (DrivenEvent -> IO ())
         -> InputSpec
-        -> IO Input
+        -> IO (Maybe Input)
     , createOutput
         :: (DrivenEvent -> IO ())
         -> HashMap InputName Input
         -> OutputSpec
-        -> IO Output
+        -> IO (Maybe Output)
     }
 
 data WorkerEnv
-  = WorkerEnv {
-    weEventSpec       :: (EventName, EventSpec)
-  , weOutputs         :: HashMap EventName (EventSpec, [Output])
-  , weInputName       :: InputName
-  , weEmitDrivenEvent :: DrivenEvent -> IO ()
-  }
+  = WorkerEnv
+    {
+      weEventSpec       :: (EventName, EventSpec)
+    , weOutputs         :: HashMap EventName (EventSpec, [Output])
+    , weInputName       :: InputName
+    , weEmitDrivenEvent :: DrivenEvent -> IO ()
+    }
 
 data WorkerMsg
   = WorkerMsg
@@ -337,3 +338,6 @@ type Schema
 
 type SchemaSpec
   = EventSpec -> IO (Maybe Schema)
+
+type BackendSpec
+  = InputSpec -> IO Backend

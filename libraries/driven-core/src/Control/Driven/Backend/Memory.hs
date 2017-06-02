@@ -1,7 +1,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
-module Control.Driven.Internal.Backend.Memory where
+module Control.Driven.Backend.Memory where
 
 import Protolude
 
@@ -26,7 +26,7 @@ import Control.Driven.Internal.Types
 parseMemoryQueue
   :: HashMap Text JSON.Value
   -> JSON.Parser (Int, Int)
-parseMemoryQueue memoryQueueObj =
+parseMemoryQueue memoryQueueObj = do
   (,)
     <$> memoryQueueObj .: "max_size"
     <*> memoryQueueObj .: "retry_after_ms"
@@ -63,13 +63,16 @@ createMemoryQueueInput emitEvent inputName retryMillis totalSize = do
 memCreateInput
   :: (DrivenEvent -> IO ())
   -> InputSpec
-  -> IO Input
+  -> IO (Maybe Input)
 memCreateInput emitEvent spec@InputSpec {..} =
-  case JSON.parseEither parseMemoryQueue isObject of
-    Left err ->
-      throwIO $ InputCreationError spec (Text.pack err)
-    Right (totalSize, retryMillis) ->
-      createMemoryQueueInput emitEvent isName retryMillis totalSize
+  if isBackendName == "memory_queue" then
+    case JSON.parseEither parseMemoryQueue isObject of
+      Left err ->
+        throwIO $ InputCreationError spec (Text.pack err)
+      Right (totalSize, retryMillis) ->
+        Just <$> createMemoryQueueInput emitEvent isName retryMillis totalSize
+  else
+    return Nothing
 
 --------------------------------------------------------------------------------
 -- Output
@@ -78,15 +81,20 @@ memCreateOutput
   :: (DrivenEvent -> IO ())
   -> HashMap InputName Input
   -> OutputSpec
-  -> IO Output
+  -> IO (Maybe Output)
 memCreateOutput emitEvent allInputs OutputSpec {..} =
-  case HashMap.lookup osName allInputs of
-    Nothing ->
-      throwIO $ InputNameNotFound osName
-    Just eventInput -> do
-      emitEvent $ OutputCreated "memory_queue" osName
-      return $ Output (writeToInput eventInput)
-                      (emitEvent $ OutputDisposed "memory_queue" osName)
+  if osBackendName == "memory_queue" then
+    case HashMap.lookup osName allInputs of
+      Nothing ->
+        throwIO $ InputNameNotFound osName
+      Just eventInput -> do
+        emitEvent $ OutputCreated "memory_queue" osName
+        return
+          $ Just
+          $ Output (writeToInput eventInput)
+                   (emitEvent $ OutputDisposed "memory_queue" osName)
+  else
+    return Nothing
 
 --------------------------------------------------------------------------------
 

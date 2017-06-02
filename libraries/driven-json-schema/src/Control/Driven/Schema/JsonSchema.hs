@@ -13,7 +13,7 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text            as Text
 import qualified JSONSchema.Draft4    as D4
 
-import Control.Driven.Internal.Types
+import Control.Driven.Types
 
 --------------------------------------------------------------------------------
 

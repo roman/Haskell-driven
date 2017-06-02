@@ -19,8 +19,8 @@ import qualified Data.Yaml            as YAML
 
 -- import Proto.MessageQueuedV10 (MessageQueued(..))
 
-import Control.Driven.Internal.Core
-import Control.Driven.Internal.Types
+import Control.Driven
+import Control.Driven.Types
 
 import Control.Driven.Schema.JsonSchema as J
 
@@ -72,7 +72,7 @@ main = do
   hSetBuffering stdout LineBuffering
   let
     fileResult =
-      YAML.decodeEither $(embedFile "./examples/driven-example/resources/config/spec.yaml")
+      YAML.decodeEither $(embedFile "./resources/config/spec.yaml")
 
   case fileResult of
     Left err ->
@@ -82,7 +82,7 @@ main = do
         startSystem
           drivenConfig
           print -- (putStrLn . JSON.encode)
-          []
+          [memoryBackend]
           [J.jsonSchema]
           [ ("message_queued",  [J.jsonHandler handleMessageQueued])
           , ("topic_validated", [J.jsonHandler handleTopicValidated]) ]

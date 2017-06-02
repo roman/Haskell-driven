@@ -27,10 +27,12 @@ library
   default-language:  Haskell2010
   ghc-options:       -Wall -Werror -O2
   hs-source-dirs:    src
-  exposed-modules:   Control.Driven.Internal.Core
-                   , Control.Driven.Internal.Types
+  exposed-modules:   Control.Driven
+                   , Control.Driven.Types
+                   , Control.Driven.Backend.Memory
   other-modules:     Control.Driven.Internal.Worker
-                   , Control.Driven.Internal.Backend.Memory
+                   , Control.Driven.Internal.Types
+                   , Control.Driven.Internal.Core
   build-depends:     base >= 4.8 && < 5
                    , protolude
                    --
