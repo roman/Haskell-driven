@@ -1,6 +1,0 @@
-syntax = "proto3";
-
-message MessageQueued {
-  string message_id = 1;
-  map<string, string> payload = 2;
-}
