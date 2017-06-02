@@ -45,8 +45,12 @@ createMemoryQueueInput emitEvent inputName retryMillis totalSize = do
 
     read = do
       message <- atomically $ readTBQueue queue
+      -- TODO: Make this more efficient by having a single thread that deals
+      -- with re-send every millisecond
       retryAsync <-
-        async $ threadDelay (retryMillis * 1000) >> unread message
+        async $ do
+          threadDelay (retryMillis * 1000)
+          unread message
       return (message, cancel retryAsync)
 
     write =
@@ -64,7 +68,7 @@ memCreateInput emitEvent spec@InputSpec {..} =
   case JSON.parseEither parseMemoryQueue isObject of
     Left err ->
       throwIO $ InputCreationError spec (Text.pack err)
-    Right (retryMillis, totalSize) ->
+    Right (totalSize, retryMillis) ->
       createMemoryQueueInput emitEvent isName retryMillis totalSize
 
 --------------------------------------------------------------------------------

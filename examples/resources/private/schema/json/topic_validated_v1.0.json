@@ -1,8 +1,8 @@
 {
     "type": "object",
-    "required": ["tvMessageId"],
+    "required": ["message_id"],
     "properties": {
-        "tvMessageI": {
+        "message_id": {
             "type": "string"
         }
     }

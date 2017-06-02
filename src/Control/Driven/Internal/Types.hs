@@ -42,7 +42,7 @@ type EventName = Text
 type TypeName = Text
 type ErrorMessage = Text
 type BackendName = Text
-type FormatName = Text
+type SchemaTypeName = Text
 type EventPayload = Text
 
 data WorkerSpec
@@ -106,8 +106,9 @@ data DrivenError
   | OutputNameNotFound EventName OutputName
   | InputCreationError InputSpec ErrorMessage
   | OutputCreationError OutputSpec ErrorMessage
-  | SchemaForEventNotFound EventName JSON.Value
+  | InvalidSchemaTypeForEvent EventName JSON.Value
   | BackendNameNotFound BackendName
+  | EventHandlerInputParserFailed ErrorMessage
   deriving (Generic, Show)
 
 instance Exception DrivenError
@@ -121,15 +122,25 @@ data DrivenEvent
   | EventSchemaMissconfigured { deEventName :: EventName }
   | EventWorkerCreated { deInputName :: InputName, deEventName :: EventName }
   | EventWorkerDisposed { deInputName :: InputName, deEventName :: EventName }
-  | EventReceived { deInputName :: InputName, deEventName :: EventName, deFormatName :: FormatName }
+  | EventReceived
+      { deInputName :: InputName
+      , deEventName :: EventName
+      , deSchemaTypeName :: SchemaTypeName
+      }
   | InvalidEntryIgnored
       { deInputName    :: InputName
       , deEventName    :: EventName
-      , deFormatName   :: FormatName
+      , deFormatName   :: SchemaTypeName
       , deEventPayload :: EventPayload
       }
   | EventFormatMissconfigured { deInputName :: InputName, deEventName :: EventName }
   | EventHandlerMissconfigured { deInputName :: InputName, deEventName :: EventName }
+  | EventHandlerSucceeded
+    {
+      deInputName :: InputName
+    , deEventName :: EventName
+    , deOutputEvents :: [EventName]
+    }
   | EventHandlerFailed
     { deInputName :: InputName
     , deEventName :: EventName
@@ -186,9 +197,9 @@ data Output
 data Event
   = Event
     {
-      evSpec    :: EventSpec
-    , evOutputs :: [Output]
-    , evSchema  :: Schema
+      eSpec    :: EventSpec
+    , eOutputs :: [Output]
+    , eSchema  :: Schema
     }
 
 data
@@ -334,7 +345,7 @@ instance IOutputSerializer SomeOutputEvent where
 
 class IEventHandler handler where
   handlerTypeName :: handler -> Text
-  handleEvent :: handler -> ByteString -> IO [SomeOutputEvent]
+  handleEvent :: handler -> ByteString -> IO (Either SomeException [SomeOutputEvent])
 
 data SomeEventHandler
   = forall handler. IEventHandler handler => SomeEventHandler handler

@@ -15,7 +15,9 @@ outputs:
 
 events:
   topic_validated:
-    schema: resources/private/schema/json/topic_validated_v1.0.json
+    schema:
+      type: json_schema
+      path: ./examples/resources/private/schema/json/topic_validated_v1.0.json
     workers:
     - input: mem_topic_validated
       timeout_ms: 3000
@@ -25,7 +27,9 @@ events:
     - mem_topic_validated
 
   message_queued:
-    schema: protobuffer
+    schema:
+      type: json_schema
+      path: ./examples/resources/private/schema/json/message_queued_v1.0.json
     workers:
     - input: mem_message_queued
       timeout_ms: 3000

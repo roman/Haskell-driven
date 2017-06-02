@@ -9,7 +9,7 @@ import           Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HashMap
 
 import qualified Control.Driven.Internal.Backend.Memory as Backend
--- import           Control.Driven.Internal.Worker
+import           Control.Driven.Internal.Worker
 
 import           Control.Driven.Internal.Types
 
@@ -57,7 +57,7 @@ createSchemaMap schemaSpecList eventSpecMap  =
 
       case result of
         [] ->
-          throwIO $ SchemaForEventNotFound evName (esSchema eventSpec)
+          throwIO $ InvalidSchemaTypeForEvent evName (esSchema eventSpec)
         (schema:_) ->
           return $ HashMap.insert evName schema acc
   in
@@ -108,11 +108,12 @@ createWorkersPerEvent
   -> IO (HashMap EventName [Worker])
 createWorkersPerEvent emitEvent eventSpecMap schemaMap inputMap outputPerEvent eventHandlers =
   let
-    createWorker' evName evSpec =
+    createWorker' evName evSpec workerSpec =
           createWorker
             emitEvent
             evName
             evSpec
+            workerSpec
             inputMap
             outputPerEvent
             (workerHandler schemaMap eventHandlers)
@@ -123,7 +124,6 @@ createWorkersPerEvent emitEvent eventSpecMap schemaMap inputMap outputPerEvent e
         return (evName, workers)
 
     return $ HashMap.fromList workersPerEventList
-
 
 startSystem
   :: DrivenConfig
@@ -158,9 +158,8 @@ startSystem drivenConfig emitEvent backendMap0 schemaSpecList eventHandlers = do
 
   return $ DrivenRuntime inputMap outputMap workersPerEvent
 
---
--- stopSystem :: DrivenRuntime -> IO ()
--- stopSystem (DrivenRuntime inputMap outputMap workersPerEvent) = do
---   mapM_ disposeInput (HashMap.elems inputMap)
---   mapM_ disposeOutput (HashMap.elems outputMap)
---   mapM_ (mapM_ disposeWorker) (HashMap.elems workersPerEvent)
+stopSystem :: DrivenRuntime -> IO ()
+stopSystem (DrivenRuntime inputMap outputMap workersPerEvent) = do
+  mapM_ disposeInput (HashMap.elems inputMap)
+  mapM_ disposeOutput (HashMap.elems outputMap)
+  mapM_ (mapM_ disposeWorker) (HashMap.elems workersPerEvent)

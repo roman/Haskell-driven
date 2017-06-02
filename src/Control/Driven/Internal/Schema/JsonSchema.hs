@@ -24,11 +24,14 @@ data JsonEventHandler
 instance IEventHandler JsonEventHandler where
   handlerTypeName _ = "json_schema"
   handleEvent (JsonEventHandler handler) inputBytes =
-    case JSON.decodeStrict inputBytes of
-      Nothing ->
-        return []
-      Just inputEvent ->
-        handler inputEvent
+    case JSON.eitherDecodeStrict inputBytes of
+      Left err -> do
+        return
+          $ Left
+          $ toException
+          $ EventHandlerInputParserFailed (Text.pack err)
+      Right inputEvent ->
+        Right <$> handler inputEvent
 
 jsonHandler
   :: JSON.FromJSON event
@@ -79,8 +82,8 @@ _fetchSchemaReferences
   :: D4.SchemaWithURI D4.Schema
   -> IO (D4.URISchemaMap D4.Schema)
 _fetchSchemaReferences schemaSpec = do
-  eSchema <- D4.referencesViaHTTP schemaSpec
-  case eSchema of
+  schemaResult <- D4.referencesViaHTTP schemaSpec
+  case schemaResult of
     Left err ->
       throwIO $ JsonSchemaHttpFailure err
     Right schema ->

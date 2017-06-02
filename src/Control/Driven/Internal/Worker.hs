@@ -9,9 +9,7 @@ import Control.Concurrent.Async (async, cancel)
 import Control.Concurrent.QSemN (newQSemN, signalQSemN, waitQSemN)
 import Data.HashMap.Strict      (HashMap)
 
-import qualified Data.Aeson          as JSON
 import qualified Data.HashMap.Strict as HashMap
-import qualified Data.Text.Encoding  as Text (decodeUtf8)
 
 import Control.Driven.Internal.Types
 
@@ -47,41 +45,53 @@ workerHandler schemaMap eventHandlerMap (WorkerMsg env inputBytes deleteMsg) =
 
     emitOutputEvent outputEvent =
       let
-        mSchema =
-          HashMap.lookup evName schemaMap
+
+        outputEventName =
+          eventName outputEvent
 
         mOutputs =
-          HashMap.lookup evName outputMap
+          HashMap.lookup outputEventName outputMap
 
-      in case (mSchema, mOutputs) of
-        (Nothing, _) ->
-          weEmitDrivenEvent env (EventSchemaMissconfigured evName)
-
-        (_, Nothing) ->
+      in case mOutputs of
+        Nothing ->
           weEmitDrivenEvent env (EventOutputMissconfigured evName)
 
-        (Just checkSchema, Just (_, outputList)) ->
-          let
-            outputBytes =
-              serializeEvent outputEvent
+        Just (_evSpec, outputList) ->
+          forM_ outputList $ \output -> do
+            case HashMap.lookup outputEventName schemaMap of
+              Nothing ->
+                weEmitDrivenEvent env (EventSchemaMissconfigured evName)
+              Just checkSchema ->
+                let
+                  outputBytes =
+                    serializeEvent outputEvent
+                in
+                  case checkSchema outputBytes of
+                    Left err ->
+                      weEmitDrivenEvent env (EventSchemaMissmatch outputEventName (show err))
 
-          in
-            case checkSchema outputBytes of
-              Left err ->
-                weEmitDrivenEvent env (EventSchemaMissmatch evName (show err))
-
-              Right _ ->
-                mapM_ (`writeToOutput` outputBytes) outputList
+                    Right _ -> do
+                      putStrLn outputBytes
+                      output `writeToOutput` outputBytes
 
     runEventHandler :: SomeEventHandler -> IO ()
     runEventHandler someHandler = do
       weEmitDrivenEvent env (EventReceived inputName evName (handlerTypeName someHandler))
       handlerResult <- try $ handleEvent someHandler inputBytes
       case handlerResult of
+        -- Failure from the actual Handler
         Left (err :: SomeException) -> do
           weEmitDrivenEvent env (EventHandlerFailed inputName evName $ show err)
 
-        Right outputEventList -> do
+        -- Failure from the Schema implementation
+        Right (Left err) -> do
+          weEmitDrivenEvent env (EventHandlerFailed inputName evName $ show err)
+
+        Right (Right outputEventList) -> do
+          weEmitDrivenEvent env
+            (EventHandlerSucceeded
+               inputName evName $ map eventName outputEventList)
+
           mapM_ emitOutputEvent outputEventList
           deleteMsg
 
