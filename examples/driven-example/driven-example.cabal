@@ -27,7 +27,7 @@ executable driven-example
                      , file-embed
                      , driven-core
                      , driven-json-schema
-                     , driven-protobuffer
+                     , driven-protobuff
   default-language:    Haskell2010
 
 

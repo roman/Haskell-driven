@@ -1,4 +1,4 @@
-name:                driven-protobuffer
+name:                driven-protobuff
 version:             0.1.0.0
 -- synopsis:
 -- description:
@@ -32,7 +32,7 @@ test-suite driven-protobuffer-test
   hs-source-dirs:      test
   main-is:             Spec.hs
   build-depends:       base
-                     , driven-protobuffer
+                     , driven-protobuff
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   default-language:    Haskell2010
 
