@@ -1,11 +1,9 @@
 {-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE KindSignatures            #-}
 {-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE TypeFamilies              #-}
-{-# LANGUAGE UndecidableInstances      #-}
 {-# LANGUAGE UndecidableSuperClasses   #-}
 
 {-# LANGUAGE DeriveGeneric             #-}
@@ -30,7 +28,6 @@ import qualified Data.Aeson.Types     as JSON
     , tagFieldName
     , typeMismatch
     )
-import qualified Data.ProtoLens       as Proto (Message, decodeMessage, encodeMessage)
 
 --------------------------------------------------------------------------------
 
@@ -238,16 +235,6 @@ newtype Worker
 
 --------------------------------------------------------------------------------
 
--- parseSchemaSpec
---   :: JSON.Value
---   -> JSON.Parser (HashMap Text JSON.Value)
--- parseSchemaSpec value =
---   case value of
---     JSON.Object object ->
---       return object
---     _ ->
---       JSON.typeMismatch "Driven.SchemaSpec" value
-
 parseWorkerSpec
   :: JSON.Value
   -> JSON.Parser WorkerSpec
@@ -307,21 +294,6 @@ instance JSON.FromJSON EventSpec where
     parseEventSpec
 
 --------------------------------------------------------------------------------
-
-class FromProtobuff msg where
-  fromProtobuff :: ByteString -> Maybe msg
-
-instance Proto.Message msg => FromProtobuff msg where
-  fromProtobuff =
-    either (const Nothing) Just . Proto.decodeMessage
-
-class ToProtobuff msg where
-  toProtobuff :: msg -> ByteString
-
-instance Proto.Message msg => ToProtobuff msg where
-  toProtobuff = Proto.encodeMessage
-
---------------------
 
 class IOutputEvent event where
   eventName :: event -> Text
