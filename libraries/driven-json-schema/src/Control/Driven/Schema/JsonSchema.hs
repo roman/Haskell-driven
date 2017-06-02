@@ -1,17 +1,17 @@
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE NoImplicitPrelude         #-}
+{-# LANGUAGE OverloadedStrings         #-}
 module Control.Driven.Schema.JsonSchema where
 
 import Protolude
 
 import Data.Aeson ((.:))
 
-import qualified Data.Aeson as JSON
-import qualified Data.Aeson.Types as JSON (Parser, parseEither, typeMismatch)
+import qualified Data.Aeson           as JSON
+import qualified Data.Aeson.Types     as JSON (Parser, parseEither, typeMismatch)
 import qualified Data.ByteString.Lazy as LBS
-import qualified Data.Text as Text
-import qualified JSONSchema.Draft4 as D4
+import qualified Data.Text            as Text
+import qualified JSONSchema.Draft4    as D4
 
 import Control.Driven.Internal.Types
 

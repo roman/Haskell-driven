@@ -1,26 +1,26 @@
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE OverloadedLists #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveAnyClass    #-}
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedLists   #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 module Main where
 
 import Protolude
-import System.IO (hSetBuffering, BufferMode(..))
+import System.IO (BufferMode (..), hSetBuffering)
 
-import qualified Data.HashMap.Strict as HashMap
+import qualified Data.Aeson           as JSON
+import qualified Data.Aeson.TH        as JSON
+import qualified Data.Aeson.Types     as JSON (camelTo2, fieldLabelModifier)
 import qualified Data.ByteString.Lazy as LBS
-import qualified Data.Aeson.TH as JSON
-import qualified Data.Aeson as JSON
-import qualified Data.Aeson.Types as JSON (camelTo2, fieldLabelModifier)
-import qualified Data.Yaml as YAML
-import Data.FileEmbed (embedFile)
+import           Data.FileEmbed       (embedFile)
+import qualified Data.HashMap.Strict  as HashMap
+import qualified Data.Yaml            as YAML
 
 -- import Proto.MessageQueuedV10 (MessageQueued(..))
 
-import Control.Driven.Internal.Types
 import Control.Driven.Internal.Core
+import Control.Driven.Internal.Types
 
 import Control.Driven.Schema.JsonSchema as J
 

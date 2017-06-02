@@ -1,20 +1,21 @@
-{-# LANGUAGE UndecidableInstances      #-}
-{-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE NoImplicitPrelude         #-}
+{-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE UndecidableInstances      #-}
 module Control.Driven.Schema.Protobuff where
 
 import Protolude
 
 import Data.Aeson ((.:))
 
-import qualified Data.Aeson as JSON
+import qualified Data.Aeson       as JSON
 import qualified Data.Aeson.Types as JSON (Parser, parseEither, typeMismatch)
-import qualified Data.Text as Text
+import qualified Data.Text        as Text
 
-import qualified Data.ProtoLens       as Proto (Message, decodeMessage, encodeMessage)
-import Control.Driven.Internal.Types
+import           Control.Driven.Internal.Types
+import qualified Data.ProtoLens                as Proto
+    (Message, decodeMessage, encodeMessage)
 
 --------------------------------------------------------------------------------
 

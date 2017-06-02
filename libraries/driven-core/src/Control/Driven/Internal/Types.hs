@@ -16,8 +16,8 @@ import Protolude
 import Data.Aeson          ((.:))
 import Data.HashMap.Strict (HashMap)
 
-import qualified Data.Aeson           as JSON
-import qualified Data.Aeson.Types     as JSON
+import qualified Data.Aeson       as JSON
+import qualified Data.Aeson.Types as JSON
     ( Parser
     , camelTo2
     , constructorTagModifier
@@ -119,8 +119,8 @@ data DrivenEvent
   | EventWorkerCreated { deInputName :: InputName, deEventName :: EventName }
   | EventWorkerDisposed { deInputName :: InputName, deEventName :: EventName }
   | EventReceived
-      { deInputName :: InputName
-      , deEventName :: EventName
+      { deInputName      :: InputName
+      , deEventName      :: EventName
       , deSchemaTypeName :: SchemaTypeName
       }
   | InvalidEntryIgnored
@@ -133,18 +133,18 @@ data DrivenEvent
   | EventHandlerMissconfigured { deInputName :: InputName, deEventName :: EventName }
   | EventHandlerSucceeded
     {
-      deInputName :: InputName
-    , deEventName :: EventName
+      deInputName    :: InputName
+    , deEventName    :: EventName
     , deOutputEvents :: [EventName]
     }
   | EventHandlerFailed
     { deInputName :: InputName
     , deEventName :: EventName
-    , deMessage :: ErrorMessage
+    , deMessage   :: ErrorMessage
     }
   | EventSerializerMissconfigured
-    { deEventName :: EventName
-    , deCodeSchema :: Text
+    { deEventName        :: EventName
+    , deCodeSchema       :: Text
     , deConfiguredSchema :: Text
     }
   | EventSchemaMissmatch
@@ -214,9 +214,9 @@ data
 
 data WorkerEnv
   = WorkerEnv {
-    weEventSpec :: (EventName, EventSpec)
-  , weOutputs   :: HashMap EventName (EventSpec, [Output])
-  , weInputName :: InputName
+    weEventSpec       :: (EventName, EventSpec)
+  , weOutputs         :: HashMap EventName (EventSpec, [Output])
+  , weInputName       :: InputName
   , weEmitDrivenEvent :: DrivenEvent -> IO ()
   }
 

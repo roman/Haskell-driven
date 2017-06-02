@@ -11,7 +11,7 @@ import qualified Data.HashMap.Strict as HashMap
 import qualified Control.Driven.Internal.Backend.Memory as Backend
 import           Control.Driven.Internal.Worker
 
-import           Control.Driven.Internal.Types
+import Control.Driven.Internal.Types
 
 --------------------------------------------------------------------------------
 
