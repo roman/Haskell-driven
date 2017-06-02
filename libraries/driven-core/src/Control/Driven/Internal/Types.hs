@@ -324,8 +324,8 @@ data SomeEventHandler
 instance IEventHandler SomeEventHandler where
   handlerTypeName (SomeEventHandler handler) =
     handlerTypeName handler
-  handleEvent (SomeEventHandler handler) inputBytes =
-    handleEvent handler inputBytes
+  handleEvent (SomeEventHandler handler) =
+    handleEvent handler
 
 --------------------
 

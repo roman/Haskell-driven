@@ -46,7 +46,7 @@ handleMessageQueued (MessageQueued msgId _payload) = do
 
 --------------------
 
-data TopicValidated
+newtype TopicValidated
   = TopicValidated { tvMessageId :: Text }
   deriving (Generic)
 
@@ -89,7 +89,7 @@ main = do
       case HashMap.lookup "mem_message_queued" (runtimeInputs drivenRuntime) of
         Nothing ->
           putStrLn ("runtimeInputs doesn't have defined input" :: Text)
-        Just input -> do
+        Just input ->
           writeToInput input (LBS.toStrict $ JSON.encode $ MessageQueued "hello" $ JSON.object [])
 
       threadDelay 5000000
