@@ -26,4 +26,6 @@ dependencies:
 - driven-protobuff-schema
 executables:
   driven-example:
+    source-dirs:
+    - src
     main: Main.hs
