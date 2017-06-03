@@ -1,8 +1,8 @@
 name: driven-example
-version: '0.1.0.0'
+version: '0.0.0.1'
 category: Web
-author: Author name here
-maintainer: example@example.com
+author: Roman Gonzalez
+maintainer: romanandreg@gmail.com
 copyright: 2017 Author name here
 license: BSD3
 github: githubuser/driven-example
@@ -23,8 +23,7 @@ dependencies:
 - file-embed
 - driven-core
 - driven-json-schema
-- driven-protobuff
+- driven-protobuff-schema
 executables:
   driven-example:
     main: Main.hs
-    source-dirs: src

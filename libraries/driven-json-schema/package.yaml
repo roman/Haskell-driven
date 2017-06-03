@@ -1,11 +1,11 @@
 name: driven-json-schema
-version: '0.1.0.0'
+version: '0.0.0.1'
 category: Web
-author: Author name here
-maintainer: example@example.com
-copyright: 2017 Author name here
+author: Roman Gonzalez
+maintainer: romanandreg@gmail.com
+copyright: 2017 Roman Gonzalez
 license: MIT
-github: githubuser/driven-json-schema
+github: roman/Haskell-driven
 extra-source-files:
 - README.md
 library:
