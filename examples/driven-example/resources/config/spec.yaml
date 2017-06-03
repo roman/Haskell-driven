@@ -3,7 +3,6 @@ inputs:
   name: mem_topic_validated
   max_size: 1000
   retry_after_ms: 120000
-
 - type: memory_queue
   name: mem_message_queued
   max_size: 1000
@@ -18,26 +17,25 @@ events:
     schema:
       type: json_schema
       path: ./examples/driven-example/resources/private/schema/json/topic_validated_v1.0.json
+
     workers:
-    - input: mem_topic_validated
+    - consumes: mem_topic_validated
       timeout_ms: 3000
       count: 2
 
-    outputs:
-    - mem_topic_validated
+    delivers: []
 
   message_queued:
     schema:
       type: json_schema
       path: ./examples/driven-example/resources/private/schema/json/message_queued_v1.0.json
+
     workers:
-    - input: mem_message_queued
+    - consumes: mem_message_queued
       timeout_ms: 3000
       count: 2
-    outputs: []
-    # - type: sqs
-    #   url: sqs://
-    #
-    # output:
-    # - type: sns
-    #   sns_arn: sns://...
+
+    delivers:
+    - event: topic_validated
+      output: mem_topic_validated
+      optional: true

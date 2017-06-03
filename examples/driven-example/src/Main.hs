@@ -20,7 +20,6 @@ import qualified Data.Yaml            as YAML
 -- import Proto.MessageQueuedV10 (MessageQueued(..))
 
 import Control.Driven
-import Control.Driven.Types
 
 import Control.Driven.Schema.JsonSchema as J
 
@@ -42,7 +41,8 @@ instance IOutputEvent MessageQueued where
 handleMessageQueued :: MessageQueued -> IO [SomeOutputEvent]
 handleMessageQueued (MessageQueued msgId _payload) = do
   putStrLn $ "===> message_queued " <> msgId
-  return [J.json $ TopicValidated "abc-123"]
+  -- return [J.json $ TopicValidated "abc-123"]
+  return []
 
 --------------------
 
@@ -72,7 +72,8 @@ main = do
   hSetBuffering stdout LineBuffering
   let
     fileResult =
-      YAML.decodeEither $(embedFile "./resources/config/spec.yaml")
+      YAML.decodeEither $(embedFile "./examples/driven-example/resources/config/spec.yaml")
+      -- YAML.decodeEither $(embedFile "./resources/config/spec.yaml")
 
   case fileResult of
     Left err ->

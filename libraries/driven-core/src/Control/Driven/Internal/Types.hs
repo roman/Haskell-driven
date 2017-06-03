@@ -35,6 +35,8 @@ type TimeoutMillis = Int
 type InputName = Text
 type OutputName = Text
 type EventName = Text
+type InputEventName = Text
+type OutputEventName = Text
 type TypeName = Text
 type ErrorMessage = Text
 type BackendName = Text
@@ -43,9 +45,18 @@ type EventPayload = Text
 
 data WorkerSpec
   = WorkerSpec
-    { wsInputName :: InputName
+    { wsConsumes :: InputName
     , wsTimeout   :: Int
     , wsCount     :: Int
+    }
+  deriving (Generic, Show, Eq)
+
+data DeliverySpec
+  = DeliverySpec
+    {
+      dsEventName  :: OutputEventName
+    , dsOutputName :: OutputName
+    , dsOptional   :: Bool
     }
   deriving (Generic, Show, Eq)
 
@@ -53,7 +64,7 @@ data EventSpec
   = EventSpec
     { esSchema      :: JSON.Value
     , esWorkerSpecs :: [WorkerSpec]
-    , esOutputNames :: [OutputName]
+    , esDeliveries    :: [DeliverySpec]
     }
   deriving (Generic, Show, Eq)
 
@@ -99,11 +110,13 @@ instance JSON.FromJSON DrivenConfig where
 
 data DrivenError
   = InputNameNotFound InputName
-  | OutputNameNotFound EventName OutputName
+  | OutputNameNotFound EventName EventName OutputName
   | InputCreationError InputSpec ErrorMessage
   | OutputCreationError OutputSpec ErrorMessage
   | InvalidSchemaTypeForEvent EventName JSON.Value
   | BackendNameNotFound Text
+  | EventDeliveriesConfigurationMissing EventName
+  | EventHandlerDeliveriesMissing EventName [EventName]
   | EventHandlerInputParserFailed ErrorMessage
   deriving (Generic, Show)
 
@@ -216,7 +229,7 @@ data WorkerEnv
   = WorkerEnv
     {
       weEventSpec       :: (EventName, EventSpec)
-    , weOutputs         :: HashMap EventName (EventSpec, [Output])
+    , weOutputs         :: HashMap EventName [Output]
     , weInputName       :: InputName
     , weEmitDrivenEvent :: DrivenEvent -> IO ()
     }
@@ -242,7 +255,7 @@ parseWorkerSpec value =
   case value of
     JSON.Object workerObj ->
       WorkerSpec
-      <$> workerObj .: "input"
+      <$> workerObj .: "consumes"
       <*> workerObj .: "timeout_ms"
       <*> workerObj .: "count"
     _ ->
@@ -278,6 +291,21 @@ parseOutputSpec drivenConfigObj outputSpecValue =
     _ ->
       JSON.typeMismatch "Driven.OutputSpec" outputSpecValue
 
+parseDeliverySpec :: JSON.Value -> JSON.Parser DeliverySpec
+parseDeliverySpec value =
+  case value of
+    JSON.Object deliverySpecObj ->
+      DeliverySpec
+      <$> deliverySpecObj .: "event"
+      <*> deliverySpecObj .: "output"
+      <*> deliverySpecObj .: "optional"
+    _ ->
+      JSON.typeMismatch "Driven.DeliverySpec" value
+
+instance JSON.FromJSON DeliverySpec where
+  parseJSON =
+    parseDeliverySpec
+
 parseEventSpec :: JSON.Value -> JSON.Parser EventSpec
 parseEventSpec value =
   case value of
@@ -285,7 +313,7 @@ parseEventSpec value =
       EventSpec
       <$> eventObj .: "schema"
       <*> eventObj .: "workers"
-      <*> (fromMaybe [] <$> eventObj .: "outputs")
+      <*> eventObj .: "delivers"
     _ ->
       JSON.typeMismatch "Driven.EventSpec" value
 

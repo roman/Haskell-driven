@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -24,22 +25,56 @@ data DrivenRuntime
 
 --------------------------------------------------------------------------------
 
-collectOutputsPerEventName
-  :: HashMap EventName EventSpec
+processEventDelivers
+  :: HashMap InputEventName EventSpec
   -> HashMap OutputName Output
-  -> IO (HashMap EventName (EventSpec, [Output]))
-collectOutputsPerEventName eventSpecMap allOutputs =
+  -> IO (HashMap InputEventName [DeliverySpec], HashMap OutputEventName [Output])
+processEventDelivers eventSpecMap outputMap =
   let
-    step acc (evName, eventSpec) = do
-      outputs <-
-        forM (esOutputNames eventSpec) $ \outputName ->
-          maybe (throwIO $ OutputNameNotFound evName outputName)
-                return
-                (HashMap.lookup outputName allOutputs)
-      return $ HashMap.insert evName (eventSpec, outputs) acc
+    outputEvStep
+      :: InputEventName
+      -> HashMap OutputEventName [Output]
+      -> DeliverySpec
+      -> IO (HashMap OutputEventName [Output])
+    outputEvStep inputEvName outputMapAcc deliverySpec =
+      let
+        outputEvName =
+          dsEventName deliverySpec
+
+        outputName =
+          dsOutputName deliverySpec
+      in do
+        output <-
+            maybe (throwIO $ OutputNameNotFound inputEvName outputEvName outputName)
+                  return
+                  (HashMap.lookup outputName outputMap)
+
+        return
+          $ HashMap.unionWith
+              (++)
+              (HashMap.singleton outputEvName [output])
+              outputMapAcc
+
+    inputEvStep
+      :: (HashMap InputEventName [DeliverySpec], HashMap OutputEventName [Output])
+      -> (InputEventName, EventSpec)
+      -> IO (HashMap InputEventName [DeliverySpec], HashMap OutputEventName [Output])
+    inputEvStep (deliverySpecList, outputMapAcc) (inputEvName, eventSpec) = do
+      let
+        deliveryPerInputEventMap1 =
+          HashMap.insert inputEvName
+                         (esDeliveries eventSpec)
+                         deliverySpecList
+
+      outputMapAcc1 <-
+        foldM (outputEvStep inputEvName)
+              outputMapAcc
+              (esDeliveries eventSpec)
+
+      return $ (deliveryPerInputEventMap1, outputMapAcc1)
 
   in
-    foldM step HashMap.empty (HashMap.toList eventSpecMap)
+    foldM inputEvStep (HashMap.empty, HashMap.empty) (HashMap.toList eventSpecMap)
 
 createSchemaMap
   :: [SchemaSpec]
@@ -118,10 +153,11 @@ createWorkersPerEvent
   -> HashMap EventName EventSpec
   -> HashMap EventName Schema
   -> HashMap InputName Input
-  -> HashMap EventName (EventSpec, [Output])
+  -> HashMap EventName [Output]
+  -> HashMap EventName [DeliverySpec]
   -> HashMap EventName [SomeEventHandler]
   -> IO (HashMap EventName [Worker])
-createWorkersPerEvent emitDrivenEvent eventSpecMap schemaMap inputMap outputPerEvent eventHandlers =
+createWorkersPerEvent emitDrivenEvent eventSpecMap schemaMap inputMap outputPerEvent deliveriesPerInputEvent eventHandlers =
   let
     createWorker' evName evSpec workerSpec =
           createWorker
@@ -131,7 +167,7 @@ createWorkersPerEvent emitDrivenEvent eventSpecMap schemaMap inputMap outputPerE
             workerSpec
             inputMap
             outputPerEvent
-            (workerHandler schemaMap eventHandlers)
+            (workerHandler schemaMap deliveriesPerInputEvent eventHandlers)
   in do
     workersPerEventList <-
       forM (HashMap.toList eventSpecMap) $ \(evName, evSpec) -> do
@@ -163,9 +199,18 @@ startSystem drivenConfig emitDrivenEvent backendList schemaSpecList eventHandler
   outputMap <- createOutputMap emitDrivenEvent inputMap backendList outputSpecMap
   schemaMap <- createSchemaMap schemaSpecList eventSpecMap
 
-  outputPerEvent <- collectOutputsPerEventName eventSpecMap outputMap
+  (outputEventsPerInput, outputPerEvent) <-
+    processEventDelivers eventSpecMap outputMap
+
   workersPerEvent <-
-    createWorkersPerEvent emitDrivenEvent eventSpecMap schemaMap inputMap outputPerEvent eventHandlers
+    createWorkersPerEvent
+      emitDrivenEvent
+      eventSpecMap
+      schemaMap
+      inputMap
+      outputPerEvent
+      outputEventsPerInput
+      eventHandlers
 
   return $ DrivenRuntime inputMap outputMap workersPerEvent
 

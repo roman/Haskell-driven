@@ -9,6 +9,7 @@ import Control.Concurrent.Async (async, cancel)
 import Control.Concurrent.QSemN (newQSemN, signalQSemN, waitQSemN)
 import Data.HashMap.Strict      (HashMap)
 
+import qualified Data.Set as Set
 import qualified Data.HashMap.Strict as HashMap
 
 import Control.Driven.Internal.Types
@@ -20,21 +21,62 @@ fetchWorkerInputSource
 fetchWorkerInputSource workerSpec inputMap =
   let
     inputName =
-      wsInputName workerSpec
+      wsConsumes workerSpec
 
   in
     maybe (throwIO $ InputNameNotFound inputName)
           return
           (HashMap.lookup inputName inputMap)
 
+checkEventDeliveryContract
+  :: HashMap InputEventName [DeliverySpec]
+  -> InputEventName
+  -> [SomeOutputEvent]
+  -> Either SomeException ()
+checkEventDeliveryContract deliverySpecListPerInput inputEventName actualEvents =
+  let
+    actualOutputEventNameSet =
+      Set.fromList (map eventName actualEvents)
+
+  in
+    case HashMap.lookup inputEventName deliverySpecListPerInput of
+      Nothing ->
+        Left $ toException $ EventDeliveriesConfigurationMissing inputEventName
+
+      Just deliverySpecList ->
+        let
+          specOutputEventNameSet =
+            deliverySpecList
+            & concatMap (\deliverySpec ->
+                           if dsOptional deliverySpec then
+                             []
+                           else
+                             [dsEventName deliverySpec])
+            & Set.fromList
+
+          shouldNotifyError =
+            not $ specOutputEventNameSet  `Set.isSubsetOf` actualOutputEventNameSet
+
+          missingOutputEventNameList =
+            Set.toList
+              $ Set.difference specOutputEventNameSet actualOutputEventNameSet
+        in
+          if shouldNotifyError then
+            Left
+              $ toException
+              $ EventHandlerDeliveriesMissing inputEventName missingOutputEventNameList
+          else
+            Right ()
+
 workerHandler
-  :: HashMap EventName Schema
-  -> HashMap EventName [SomeEventHandler]
+  :: HashMap InputEventName Schema
+  -> HashMap InputEventName [DeliverySpec]
+  -> HashMap InputEventName [SomeEventHandler]
   -> WorkerMsg
   -> IO ()
-workerHandler schemaMap eventHandlerMap (WorkerMsg env inputBytes deleteMsg) =
+workerHandler schemaMap deliveriesPerInputEvent eventHandlerMap (WorkerMsg env inputBytes deleteMsg) =
   let
-    evName =
+    inputEventName =
       fst $ weEventSpec env
 
     inputName =
@@ -54,13 +96,13 @@ workerHandler schemaMap eventHandlerMap (WorkerMsg env inputBytes deleteMsg) =
 
       in case mOutputs of
         Nothing ->
-          weEmitDrivenEvent env (EventOutputMissconfigured evName)
+          weEmitDrivenEvent env (EventOutputMissconfigured inputEventName)
 
-        Just (_evSpec, outputList) ->
+        Just outputList ->
           forM_ outputList $ \output ->
             case HashMap.lookup outputEventName schemaMap of
               Nothing ->
-                weEmitDrivenEvent env (EventSchemaMissconfigured evName)
+                weEmitDrivenEvent env (EventSchemaMissconfigured inputEventName)
               Just checkSchema ->
                 let
                   outputBytes =
@@ -76,40 +118,44 @@ workerHandler schemaMap eventHandlerMap (WorkerMsg env inputBytes deleteMsg) =
 
     runEventHandler :: SomeEventHandler -> IO ()
     runEventHandler someHandler = do
-      weEmitDrivenEvent env (EventReceived inputName evName (handlerTypeName someHandler))
+      weEmitDrivenEvent env (EventReceived inputName inputEventName (handlerTypeName someHandler))
       handlerResult <- try $ handleEvent someHandler inputBytes
       case handlerResult of
         -- Failure from the actual Handler
         Left (err :: SomeException) ->
-          weEmitDrivenEvent env (EventHandlerFailed inputName evName $ show err)
+          weEmitDrivenEvent env (EventHandlerFailed inputName inputEventName $ show err)
 
         -- Failure from the Schema implementation
         Right (Left err) ->
-          weEmitDrivenEvent env (EventHandlerFailed inputName evName $ show err)
+          weEmitDrivenEvent env (EventHandlerFailed inputName inputEventName $ show err)
 
         Right (Right outputEventList) -> do
-          weEmitDrivenEvent env
-            (EventHandlerSucceeded
-               inputName evName $ map eventName outputEventList)
+          case checkEventDeliveryContract deliveriesPerInputEvent inputEventName outputEventList of
+            Left err ->
+              weEmitDrivenEvent env (EventHandlerFailed inputName inputEventName $ show err)
+            Right _ -> do
+              mapM_ emitOutputEvent outputEventList
+              deleteMsg
+              weEmitDrivenEvent env
+                (EventHandlerSucceeded
+                  inputName inputEventName $ map eventName outputEventList)
 
-          mapM_ emitOutputEvent outputEventList
-          deleteMsg
 
   in
-    case HashMap.lookup evName eventHandlerMap of
+    case HashMap.lookup inputEventName eventHandlerMap of
       Nothing ->
-        weEmitDrivenEvent env $ EventHandlerMissconfigured (weInputName env) evName
+        weEmitDrivenEvent env $ EventHandlerMissconfigured (weInputName env) inputEventName
 
       Just handlers ->
         mapM_ runEventHandler handlers
 
 createWorker
   :: (DrivenEvent -> IO ())
-  -> EventName
+  -> InputEventName
   -> EventSpec
   -> WorkerSpec
   -> HashMap InputName Input
-  -> HashMap EventName (EventSpec, [Output])
+  -> HashMap OutputEventName [Output]
   -> (WorkerMsg -> IO ())
   -> IO Worker
 createWorker emitDrivenEvent evName evSpec workerSpec inputMap outputsPerEvent msgHandler = do
@@ -117,7 +163,7 @@ createWorker emitDrivenEvent evName evSpec workerSpec inputMap outputsPerEvent m
 
   let
     inputName =
-      wsInputName workerSpec
+      wsConsumes workerSpec
 
     workerEnv =
       WorkerEnv {
