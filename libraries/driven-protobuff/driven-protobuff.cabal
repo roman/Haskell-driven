@@ -1,41 +1,53 @@
-name:                driven-protobuff
-version:             0.1.0.0
--- synopsis:
--- description:
-homepage:            https://github.com/githubuser/Haskell-driven
-license:             BSD3
-license-file:        LICENSE
-author:              Author name here
-maintainer:          example@example.com
-copyright:           2017 Author name here
-category:            Web
-build-type:          Simple
-extra-source-files:  README.md
-cabal-version:       >=1.10
+-- This file has been generated from package.yaml by hpack version 0.15.0.
+--
+-- see: https://github.com/sol/hpack
 
-library
-  hs-source-dirs:      src
-  exposed-modules:     Control.Driven.Schema.Protobuff
-  build-depends:       base >= 4.7 && < 5
-                     , protolude
-                     , aeson
-                     , text
-                     , proto-lens >=0.2 && <0.3
-                     , lens-family >=1.2 && <1.3
-                     , lens-labels >=0.1 && <0.2
-                     , data-default-class >=0.1 && <0.2
-                     , driven-core
-  default-language:    Haskell2010
+name:           driven-protobuff
+version:        0.1.0.0
+category:       Web
+homepage:       https://github.com/githubuser/driven-protobuffer#readme
+bug-reports:    https://github.com/githubuser/driven-protobuffer/issues
+author:         Author name here
+maintainer:     example@example.com
+copyright:      2017 Author name here
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+cabal-version:  >= 1.10
 
-test-suite driven-protobuffer-test
-  type:                exitcode-stdio-1.0
-  hs-source-dirs:      test
-  main-is:             Spec.hs
-  build-depends:       base
-                     , driven-protobuff
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  default-language:    Haskell2010
+extra-source-files:
+    README.md
 
 source-repository head
-  type:     git
+  type: git
   location: https://github.com/githubuser/driven-protobuffer
+
+library
+  hs-source-dirs:
+      src
+  build-depends:
+      base >=4.7 && <5
+    , protolude
+    , aeson
+    , text
+    , proto-lens >=0.2 && <0.3
+    , lens-family >=1.2 && <1.3
+    , lens-labels >=0.1 && <0.2
+    , data-default-class >=0.1 && <0.2
+    , driven-core
+  exposed-modules:
+      Control.Driven.Schema.Protobuff
+  other-modules:
+      Paths_driven_protobuff
+  default-language: Haskell2010
+
+test-suite driven-protobuffer-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base
+    , driven-protobuff
+  default-language: Haskell2010

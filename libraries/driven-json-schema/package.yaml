@@ -1,0 +1,33 @@
+name: driven-json-schema
+version: '0.1.0.0'
+category: Web
+author: Author name here
+maintainer: example@example.com
+copyright: 2017 Author name here
+license: MIT
+github: githubuser/driven-json-schema
+extra-source-files:
+- README.md
+library:
+  source-dirs: src
+  exposed-modules:
+  - Control.Driven.Schema.JsonSchema
+  dependencies:
+  - base >=4.7 && <5
+  - protolude
+  - aeson
+  - bytestring
+  - text
+  - hjsonschema
+  - driven-core
+tests:
+  driven-json-schema-test:
+    main: Spec.hs
+    source-dirs: test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - base
+    - driven-json-schema
