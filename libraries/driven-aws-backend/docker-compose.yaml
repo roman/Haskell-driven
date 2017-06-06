@@ -1,0 +1,14 @@
+yopa:
+  image: unbounce/yopa:latest
+  command: java -XX:MaxPermSize=256m -Xms64m -Xmx512m -jar uberjar.jar -c /tmp/yopa-in/config.yaml -o /tmp/yopa-out/overrides.yaml
+  expose:
+  - 47195
+  - 47196
+  - 47917
+  ports:
+  - "47195:47195"
+  - "47196:47196"
+  - "47917:47917"
+  volumes:
+  - ./yopa:/tmp/yopa-in
+  - /tmp/yopa-out:/tmp/yopa-out

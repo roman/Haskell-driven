@@ -1,0 +1,41 @@
+name: driven-aws-backend
+version: '0.0.0.1'
+category: Web
+author: Roman Gonzalez
+maintainer: romanandreg@gmail.com
+copyright: 2017 Roman Gonzalez
+license: BSD3
+github: roman/Haskell-driven
+extra-source-files:
+- README.md
+
+dependencies:
+- protolude
+- aeson
+- microlens
+- amazonka
+- amazonka-sqs
+- driven-core
+- text
+
+library:
+  source-dirs: src
+  exposed-modules:
+  - Control.Driven.Backend.Aws.Sqs
+  dependencies:
+  - base >=4.7 && <5
+tests:
+  driven-aws-backend-test:
+    main: TestSuite.hs
+    source-dirs: test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - base
+    - tasty
+    - tasty-discover >=3.0 && <3.1
+    - tasty-hunit
+    - tasty-hspec
+    - driven-aws-backend

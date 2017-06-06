@@ -39,10 +39,12 @@ packages:
 - libraries/driven-core
 - libraries/driven-json-schema
 - libraries/driven-protobuff-schema
+- libraries/driven-aws-backend
 - examples/driven-example
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
-extra-deps: []
+extra-deps:
+- tasty-discover-3.0.2
 
 # Override default flag values for local packages and extra-deps
 flags: {}

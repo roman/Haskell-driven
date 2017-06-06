@@ -1,0 +1,17 @@
+region: yopa-local
+host: localhost
+bind-address: 0.0.0.0
+
+sqs:
+  port: 47195
+
+sns:
+  port: 47196
+
+s3:
+  port: 47197
+  https: false
+  data-dir: /tmp/yopa-fake-s3
+
+messaging:
+  - sqs://message-queue
