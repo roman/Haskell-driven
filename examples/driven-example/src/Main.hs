@@ -72,8 +72,8 @@ main = do
   hSetBuffering stdout LineBuffering
   let
     fileResult =
-      YAML.decodeEither $(embedFile "./examples/driven-example/resources/config/spec.yaml")
-      -- YAML.decodeEither $(embedFile "./resources/config/spec.yaml")
+      -- YAML.decodeEither $(embedFile "./examples/driven-example/resources/config/spec.yaml")
+      YAML.decodeEither $(embedFile "./resources/config/spec.yaml")
 
   case fileResult of
     Left err ->
