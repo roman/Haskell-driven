@@ -35,6 +35,7 @@ library:
   - stm-chans
   - stm
   - ghc-prim
+  - SafeSemaphore
   - yaml
 tests:
   driven-test:

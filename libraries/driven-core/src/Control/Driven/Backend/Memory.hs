@@ -34,7 +34,7 @@ parseMemoryQueue memoryQueueObj =
 createMemoryQueueInput
   :: (DrivenEvent -> IO ())
   -> InputName
-  -> TimeoutMillis
+  -> WorkerTimeoutMillis
   -> Size
   -> IO Input
 createMemoryQueueInput emitEvent inputName retryMillis totalSize = do
@@ -43,7 +43,7 @@ createMemoryQueueInput emitEvent inputName retryMillis totalSize = do
     unread =
       atomically . unGetTBQueue queue
 
-    read = do
+    read _workerCount = do
       message <- atomically $ readTBQueue queue
       -- TODO: Make this more efficient by having a single thread that deals
       -- with re-send every millisecond
@@ -51,7 +51,7 @@ createMemoryQueueInput emitEvent inputName retryMillis totalSize = do
         async $ do
           threadDelay (retryMillis * 1000)
           unread message
-      return (message, cancel retryAsync)
+      return [(message, cancel retryAsync)]
 
     write =
       atomically . writeTBQueue queue

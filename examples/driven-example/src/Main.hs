@@ -41,8 +41,7 @@ instance IOutputEvent MessageQueued where
 handleMessageQueued :: MessageQueued -> IO [SomeOutputEvent]
 handleMessageQueued (MessageQueued msgId _payload) = do
   putStrLn $ "===> message_queued " <> msgId
-  -- return [J.json $ TopicValidated "abc-123"]
-  return []
+  return [J.json $ TopicValidated "abc-123"]
 
 --------------------
 

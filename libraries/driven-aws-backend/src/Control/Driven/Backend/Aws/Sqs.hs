@@ -27,31 +27,28 @@ deleteSqsMessage awsEnv msg =
       msgReceiptHandle <- msg ^. SQS.mReceiptHandle
       return $ SQS.deleteMessage msgId msgReceiptHandle
 
-readSqsMessage :: AWS.Env -> Text -> IO (ByteString, IO ())
-readSqsMessage awsEnv queueUrl =
+readSqsMessage :: AWS.Env -> Text -> Int -> IO [(ByteString, IO ())]
+readSqsMessage awsEnv queueUrl numberOfMessages =
     AWS.runResourceT $ AWS.runAWST awsEnv $ do
-      msg <- ensureRead
-      return ( maybe mempty Text.encodeUtf8 (msg ^. SQS.mBody)
-             , deleteSqsMessage awsEnv msg )
+      messageList <- ensureRead
+      forM messageList $ \msg ->
+        return ( maybe mempty Text.encodeUtf8 (msg ^. SQS.mBody)
+               , deleteSqsMessage awsEnv msg )
   where
     request =
       SQS.receiveMessage queueUrl
       & SQS.rmWaitTimeSeconds .~ Just 20
-      & SQS.rmMaxNumberOfMessages .~ Just 1
+      & SQS.rmMaxNumberOfMessages .~ Just numberOfMessages
 
     handleResponse response =
       if response ^. SQS.rmrsResponseStatus /= 200 then
         -- TODO: log response status code
         ensureRead
       else case response ^. SQS.rmrsMessages of
-        [x] ->
-          return x
-        (x:_) ->
-          -- TODO: log warning (should never happen)
-          return x
-        _ ->
-          -- TODO: log warning
+        [] ->
           ensureRead
+        messageList ->
+          return messageList
 
     ensureRead =
       AWS.send request >>= handleResponse
@@ -64,12 +61,10 @@ writeSqsMessage awsEnv queueUrl outputBytes =
       SQS.sendMessage queueUrl (Text.decodeUtf8 outputBytes)
 
     handleResponse response =
-      if response ^. SQS.smrsResponseStatus /= 200 then
+      when (response ^. SQS.smrsResponseStatus /= 200)
         -- TODO: Naive approach, retry again immediately
         -- Need to work on a reliable dispatcher API
         ensureWrite
-      else
-        return ()
 
     ensureWrite =
       AWS.send request >>= handleResponse
@@ -93,8 +88,8 @@ parseSqsInputSpec spec@InputSpec {..} =
     case JSON.parseEither (.: "queue_url") isObject of
       Left err ->
         throwIO $ InputCreationError spec (Text.pack err)
-      Right queueUrl -> do
-        return $ Just queueUrl
+      Right queueUrl ->
+        return (Just queueUrl)
   else
     return Nothing
 

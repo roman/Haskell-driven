@@ -38,4 +38,4 @@ events:
     delivers:
     - event: topic_validated
       output: mem_topic_validated
-      optional: true
+      optional: false

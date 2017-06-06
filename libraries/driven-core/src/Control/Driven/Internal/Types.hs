@@ -31,7 +31,8 @@ import qualified Data.Aeson.Types as JSON
 --------------------------------------------------------------------------------
 
 type Size = Int
-type TimeoutMillis = Int
+type WorkerCount = Int
+type WorkerTimeoutMillis = Int
 type InputName = Text
 type OutputName = Text
 type EventName = Text
@@ -45,9 +46,9 @@ type EventPayload = Text
 
 data WorkerSpec
   = WorkerSpec
-    { wsConsumes :: InputName
-    , wsTimeout   :: Int
-    , wsCount     :: Int
+    { wsConsumes  :: InputName
+    , wsTimeout   :: WorkerTimeoutMillis
+    , wsCount     :: WorkerCount
     }
   deriving (Generic, Show, Eq)
 
@@ -193,7 +194,7 @@ instance JSON.ToJSON DrivenEvent where
 data Input
   = Input
     {
-      readFromInput :: IO (ByteString, IO ())
+      readFromInput :: WorkerCount -> IO [(ByteString, IO ())]
     , writeToInput  :: ByteString -> IO ()
     , disposeInput  :: IO ()
     }

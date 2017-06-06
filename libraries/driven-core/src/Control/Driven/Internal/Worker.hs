@@ -6,9 +6,9 @@ module Control.Driven.Internal.Worker where
 import Protolude
 
 import Control.Concurrent.Async (async, cancel)
-import Control.Concurrent.QSemN (newQSemN, signalQSemN, waitQSemN)
 import Data.HashMap.Strict      (HashMap)
 
+import qualified Control.Concurrent.MSemN2 as Sem (new, wait, signal,peekAvail)
 import qualified Data.Set as Set
 import qualified Data.HashMap.Strict as HashMap
 
@@ -87,7 +87,6 @@ workerHandler schemaMap deliveriesPerInputEvent eventHandlerMap (WorkerMsg env i
 
     emitOutputEvent outputEvent =
       let
-
         outputEventName =
           eventName outputEvent
 
@@ -112,8 +111,7 @@ workerHandler schemaMap deliveriesPerInputEvent eventHandlerMap (WorkerMsg env i
                     Left err ->
                       weEmitDrivenEvent env (EventSchemaMissmatch outputEventName (show err))
 
-                    Right _ -> do
-                      putStrLn outputBytes
+                    Right _ ->
                       output `writeToOutput` outputBytes
 
     runEventHandler :: SomeEventHandler -> IO ()
@@ -133,6 +131,7 @@ workerHandler schemaMap deliveriesPerInputEvent eventHandlerMap (WorkerMsg env i
           case checkEventDeliveryContract deliveriesPerInputEvent inputEventName outputEventList of
             Left err ->
               weEmitDrivenEvent env (EventHandlerFailed inputName inputEventName $ show err)
+
             Right _ -> do
               mapM_ emitOutputEvent outputEventList
               deleteMsg
@@ -173,8 +172,7 @@ createWorker emitDrivenEvent evName evSpec workerSpec inputMap outputsPerEvent m
       , weEmitDrivenEvent = emitDrivenEvent
       }
 
-    callHandler = do
-      (message, deleteMsg) <- readFromInput evInputSource
+    callHandler (message, deleteMsg) =
       async $ do
         let
           workerMsg =
@@ -189,12 +187,16 @@ createWorker emitDrivenEvent evName evSpec workerSpec inputMap outputsPerEvent m
       emitDrivenEvent (EventWorkerDisposed inputName evName)
       cancel worker
 
-  workerSemaphore <- newQSemN (wsCount workerSpec)
+  workerSemaphore <- Sem.new (wsCount workerSpec)
   workerLoop <-
     async $ do
       emitDrivenEvent (EventWorkerCreated evName inputName)
       forever $ do
-        waitQSemN workerSemaphore 1
-        callHandler `finally` signalQSemN workerSemaphore 1
+        availableWorkers <- Sem.peekAvail workerSemaphore
+        messageList <- readFromInput evInputSource (min 1 availableWorkers)
+        forM messageList $ \message ->
+          bracket (Sem.wait workerSemaphore 1)
+                  (const $ Sem.signal workerSemaphore 1)
+                  (const $ void $ callHandler message)
 
   return (Worker $ cleanupWorker workerLoop)
