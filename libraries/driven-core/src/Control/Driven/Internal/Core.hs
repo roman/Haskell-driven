@@ -100,15 +100,15 @@ createSchemaMap schemaSpecList eventSpecMap  =
 createOutputMap
   :: (DrivenEvent -> IO ())
   -> HashMap InputName Input
-  -> [Backend]
+  -> [Transport]
   -> [OutputSpec]
   -> IO (HashMap OutputName Output)
-createOutputMap emitDrivenEvent inputMap backendList outputSpecList =
+createOutputMap emitDrivenEvent inputMap transportList outputSpecList =
   let
     step acc outputSpec = do
       result0 <-
-        mapM (\backend -> createOutput backend emitDrivenEvent inputMap outputSpec)
-             backendList
+        mapM (\transport -> createOutput transport emitDrivenEvent inputMap outputSpec)
+             transportList
 
       let
         result =
@@ -116,7 +116,7 @@ createOutputMap emitDrivenEvent inputMap backendList outputSpecList =
 
       case result of
         [] ->
-          throwIO $ BackendNameNotFound (osName outputSpec)
+          throwIO $ TransportNameNotFound (osName outputSpec)
         (output:_) ->
           return $ HashMap.insert (osName outputSpec) output acc
 
@@ -125,15 +125,15 @@ createOutputMap emitDrivenEvent inputMap backendList outputSpecList =
 
 createInputMap
   :: (DrivenEvent -> IO ())
-  -> [Backend]
+  -> [Transport]
   -> [InputSpec]
-  -> IO (HashMap BackendName Input)
-createInputMap emitDrivenEvent backendList inputSpecList =
+  -> IO (HashMap TransportName Input)
+createInputMap emitDrivenEvent transportList inputSpecList =
   let
     step acc inputSpec = do
       result0 <-
-        mapM (\backend -> createInput backend emitDrivenEvent inputSpec)
-            backendList
+        mapM (\transport -> createInput transport emitDrivenEvent inputSpec)
+            transportList
 
       let
         result =
@@ -141,7 +141,7 @@ createInputMap emitDrivenEvent backendList inputSpecList =
 
       case result of
         [] ->
-          throwIO $ BackendNameNotFound (isName inputSpec)
+          throwIO $ TransportNameNotFound (isName inputSpec)
         (input:_) ->
           return $ HashMap.insert (isName inputSpec) input acc
 
@@ -179,11 +179,11 @@ createWorkersPerEvent emitDrivenEvent eventSpecMap schemaMap inputMap outputPerE
 startSystem
   :: DrivenConfig
   -> (DrivenEvent -> IO ())
-  -> [Backend]
+  -> [Transport]
   -> [SchemaSpec]
   -> HashMap EventName [SomeEventHandler]
   -> IO DrivenRuntime
-startSystem drivenConfig emitDrivenEvent backendList schemaSpecList eventHandlers = do
+startSystem drivenConfig emitDrivenEvent transportList schemaSpecList eventHandlers = do
   let
 
     inputSpecMap =
@@ -195,8 +195,8 @@ startSystem drivenConfig emitDrivenEvent backendList schemaSpecList eventHandler
     eventSpecMap =
       drivenEvents drivenConfig
 
-  inputMap  <- createInputMap emitDrivenEvent backendList inputSpecMap
-  outputMap <- createOutputMap emitDrivenEvent inputMap backendList outputSpecMap
+  inputMap  <- createInputMap emitDrivenEvent transportList inputSpecMap
+  outputMap <- createOutputMap emitDrivenEvent inputMap transportList outputSpecMap
   schemaMap <- createSchemaMap schemaSpecList eventSpecMap
 
   (outputEventsPerInput, outputPerEvent) <-

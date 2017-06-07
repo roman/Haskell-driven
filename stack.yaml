@@ -39,7 +39,7 @@ packages:
 - libraries/driven-core
 - libraries/driven-json-schema
 - libraries/driven-protobuff-schema
-- libraries/driven-aws-backend
+- libraries/driven-aws-transport
 - examples/driven-example
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)

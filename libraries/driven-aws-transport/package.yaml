@@ -1,4 +1,4 @@
-name: driven-aws-backend
+name: driven-aws-transport
 version: '0.0.0.1'
 category: Web
 author: Roman Gonzalez
@@ -21,11 +21,11 @@ dependencies:
 library:
   source-dirs: src
   exposed-modules:
-  - Control.Driven.Backend.Aws.Sqs
+  - Control.Driven.Transport.Aws.Sqs
   dependencies:
   - base >=4.7 && <5
 tests:
-  driven-aws-backend-test:
+  driven-aws-transport-test:
     main: TestSuite.hs
     source-dirs: test
     ghc-options:
@@ -38,4 +38,4 @@ tests:
     - tasty-discover >=3.0 && <3.1
     - tasty-hunit
     - tasty-hspec
-    - driven-aws-backend
+    - driven-aws-transport

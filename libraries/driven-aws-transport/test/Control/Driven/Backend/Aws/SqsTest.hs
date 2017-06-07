@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-module Control.Driven.Backend.Aws.SqsTest where
+module Control.Driven.Transport.Aws.SqsTest where
 
 import Protolude hiding ((&))
 
@@ -11,7 +11,7 @@ import Test.Tasty.HUnit
 import Control.Driven.Types
 import qualified Control.Monad.Trans.AWS as AWS
 import qualified Network.AWS.SQS as SQS
-import qualified Control.Driven.Backend.Aws.Sqs as SUT
+import qualified Control.Driven.Transport.Aws.Sqs as SUT
 
 awsKeyId :: AWS.AccessKey
 awsKeyId = "AKI00000000000000000"

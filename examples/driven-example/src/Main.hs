@@ -35,8 +35,8 @@ $(JSON.deriveJSON
     })
   ''MessageQueued)
 
-instance IOutputEvent MessageQueued where
-  eventName _ = "message_queued"
+instance IEvent MessageQueued where
+  eventKey _ = "message_queued"
 
 handleMessageQueued :: MessageQueued -> IO [SomeOutputEvent]
 handleMessageQueued (MessageQueued msgId _payload) = do
@@ -56,8 +56,8 @@ $(JSON.deriveJSON
   ''TopicValidated)
 
 
-instance IOutputEvent TopicValidated where
-  eventName _ = "topic_validated"
+instance IEvent TopicValidated where
+  eventKey _ = "topic_validated"
 
 handleTopicValidated :: TopicValidated -> IO [SomeOutputEvent]
 handleTopicValidated (TopicValidated msgId) = do
@@ -82,7 +82,7 @@ main = do
         startSystem
           drivenConfig
           print -- (putStrLn . JSON.encode)
-          [memoryBackend]
+          [memoryTransport]
           [J.jsonSchema]
           [ ("message_queued",  [J.jsonHandler handleMessageQueued])
           , ("topic_validated", [J.jsonHandler handleTopicValidated]) ]

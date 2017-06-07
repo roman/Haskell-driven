@@ -90,19 +90,19 @@ protobuffSchema eventSpec =
 --------------------
 
 data ProtobuffOutputEvent
-  = forall event. (IOutputEvent event, ToProtobuff event)
+  = forall event. (IEvent event, ToProtobuff event)
     => ProtobuffOutputEvent event
 
-instance IOutputEvent ProtobuffOutputEvent where
-  eventName (ProtobuffOutputEvent event) =
-    eventName event
+instance IEvent ProtobuffOutputEvent where
+  eventKey (ProtobuffOutputEvent event) =
+    eventKey event
 
 instance IOutputSerializer ProtobuffOutputEvent where
   serializeEvent (ProtobuffOutputEvent event) =
     toProtobuff event
 
 protobuff
-  :: (IOutputEvent event, ToProtobuff event)
+  :: (IEvent event, ToProtobuff event)
   => event
   -> SomeOutputEvent
 protobuff =

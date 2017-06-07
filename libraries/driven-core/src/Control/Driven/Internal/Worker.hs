@@ -36,7 +36,7 @@ checkEventDeliveryContract
 checkEventDeliveryContract deliverySpecListPerInput inputEventName actualEvents =
   let
     actualOutputEventNameSet =
-      Set.fromList (map eventName actualEvents)
+      Set.fromList (map eventKey actualEvents)
 
   in
     case HashMap.lookup inputEventName deliverySpecListPerInput of
@@ -88,7 +88,7 @@ workerHandler schemaMap deliveriesPerInputEvent eventHandlerMap (WorkerMsg env i
     emitOutputEvent outputEvent =
       let
         outputEventName =
-          eventName outputEvent
+          eventKey outputEvent
 
         mOutputs =
           HashMap.lookup outputEventName outputMap
@@ -137,7 +137,7 @@ workerHandler schemaMap deliveriesPerInputEvent eventHandlerMap (WorkerMsg env i
               deleteMsg
               weEmitDrivenEvent env
                 (EventHandlerSucceeded
-                  inputName inputEventName $ map eventName outputEventList)
+                  inputName inputEventName $ map eventKey outputEventList)
 
 
   in

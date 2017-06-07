@@ -22,7 +22,7 @@ library:
   exposed-modules:
   - Control.Driven
   - Control.Driven.Types
-  - Control.Driven.Backend.Memory
+  - Control.Driven.Transport.Memory
   dependencies:
   - bytestring >=0.10 && <0.11
   - containers >=0.5 && <0.6

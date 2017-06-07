@@ -2,7 +2,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE NoImplicitPrelude #-}
-module Control.Driven.Backend.Aws.Sqs where
+module Control.Driven.Transport.Aws.Sqs where
 
 import Protolude
 
@@ -84,7 +84,7 @@ buildSqsInput emitDrivenEvent awsEnv inputName queueUrl = do
 
 parseSqsInputSpec :: InputSpec -> IO (Maybe Text)
 parseSqsInputSpec spec@InputSpec {..} =
-  if isBackendName == "sqs" then
+  if isTransportName == "sqs" then
     case JSON.parseEither (.: "queue_url") isObject of
       Left err ->
         throwIO $ InputCreationError spec (Text.pack err)

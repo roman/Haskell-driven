@@ -1,7 +1,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
-module Control.Driven.Backend.Memory where
+module Control.Driven.Transport.Memory where
 
 import Protolude
 
@@ -65,7 +65,7 @@ memCreateInput
   -> InputSpec
   -> IO (Maybe Input)
 memCreateInput emitEvent spec@InputSpec {..} =
-  if isBackendName == "memory_queue" then
+  if isTransportName == "memory_queue" then
     case JSON.parseEither parseMemoryQueue isObject of
       Left err ->
         throwIO $ InputCreationError spec (Text.pack err)
@@ -83,7 +83,7 @@ memCreateOutput
   -> OutputSpec
   -> IO (Maybe Output)
 memCreateOutput emitEvent allInputs OutputSpec {..} =
-  if osBackendName == "memory_queue" then
+  if osTransportName == "memory_queue" then
     case HashMap.lookup osName allInputs of
       Nothing ->
         throwIO $ InputNameNotFound osName
@@ -98,7 +98,7 @@ memCreateOutput emitEvent allInputs OutputSpec {..} =
 
 --------------------------------------------------------------------------------
 
-memoryBackend :: Backend
-memoryBackend =
-  Backend { createInput  = memCreateInput
+memoryTransport :: Transport
+memoryTransport =
+  Transport { createInput  = memCreateInput
           , createOutput = memCreateOutput }

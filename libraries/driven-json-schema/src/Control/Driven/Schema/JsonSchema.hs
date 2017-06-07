@@ -140,12 +140,12 @@ jsonSchema eventSpec =
 --------------------
 
 data JsonOutputEvent
-  = forall event. (IOutputEvent event, JSON.ToJSON event)
+  = forall event. (IEvent event, JSON.ToJSON event)
     => JsonOutputEvent event
 
-instance IOutputEvent JsonOutputEvent where
-  eventName (JsonOutputEvent event) =
-    eventName event
+instance IEvent JsonOutputEvent where
+  eventKey (JsonOutputEvent event) =
+    eventKey event
 
 instance IOutputSerializer JsonOutputEvent where
   serializeEvent (JsonOutputEvent event) =
@@ -155,7 +155,7 @@ instance IOutputSerializer JsonOutputEvent where
       LBS.toStrict (JSON.encode jsonValue)
 
 json
-  :: (IOutputEvent event, JSON.ToJSON event)
+  :: (IEvent event, JSON.ToJSON event)
   => event
   -> SomeOutputEvent
 json =

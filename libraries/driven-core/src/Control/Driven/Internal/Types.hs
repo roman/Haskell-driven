@@ -40,7 +40,7 @@ type InputEventName = Text
 type OutputEventName = Text
 type TypeName = Text
 type ErrorMessage = Text
-type BackendName = Text
+type TransportName = Text
 type SchemaTypeName = Text
 type EventPayload = Text
 
@@ -72,7 +72,7 @@ data EventSpec
 data InputSpec
   = InputSpec
     { isName         :: InputName
-    , isBackendName  :: BackendName
+    , isTransportName  :: TransportName
     , isObject       :: HashMap Text JSON.Value
     , isDrivenObject :: HashMap Text JSON.Value
     }
@@ -81,7 +81,7 @@ data InputSpec
 data OutputSpec
   = OutputSpec
     { osName         :: OutputName
-    , osBackendName  :: BackendName
+    , osTransportName  :: TransportName
     , osObject       :: HashMap Text JSON.Value
     , osDrivenObject :: HashMap Text JSON.Value
     }
@@ -115,7 +115,7 @@ data DrivenError
   | InputCreationError InputSpec ErrorMessage
   | OutputCreationError OutputSpec ErrorMessage
   | InvalidSchemaTypeForEvent EventName JSON.Value
-  | BackendNameNotFound Text
+  | TransportNameNotFound Text
   | EventDeliveriesConfigurationMissing EventName
   | EventHandlerDeliveriesMissing EventName [EventName]
   | EventHandlerInputParserFailed ErrorMessage
@@ -124,10 +124,10 @@ data DrivenError
 instance Exception DrivenError
 
 data DrivenEvent
-  = InputCreated { deBackendName :: BackendName, deInputName :: InputName }
-  | InputDisposed { deBackendName :: BackendName, deInputName :: InputName }
-  | OutputCreated { deBackendName :: BackendName, deOutputName :: OutputName }
-  | OutputDisposed { deBackendName :: BackendName, deOutputName :: OutputName }
+  = InputCreated { deTransportName :: TransportName, deInputName :: InputName }
+  | InputDisposed { deTransportName :: TransportName, deInputName :: InputName }
+  | OutputCreated { deTransportName :: TransportName, deOutputName :: OutputName }
+  | OutputDisposed { deTransportName :: TransportName, deOutputName :: OutputName }
   | EventOutputMissconfigured { deEventName :: EventName }
   | EventSchemaMissconfigured { deEventName :: EventName }
   | EventWorkerCreated { deInputName :: InputName, deEventName :: EventName }
@@ -212,8 +212,8 @@ data Event
     , eSchema  :: Schema
     }
 
-data Backend
-  = Backend
+data Transport
+  = Transport
     {
       createInput
         :: (DrivenEvent -> IO ())
@@ -324,19 +324,25 @@ instance JSON.FromJSON EventSpec where
 
 --------------------------------------------------------------------------------
 
-class IOutputEvent event where
-  eventName :: event -> Text
+class IEvent event where
+  eventKey :: event -> Text
+  eventCorrelationId :: event -> Text
+  eventContext :: event -> HashMap Text Text
 
-class IOutputEvent serializer => IOutputSerializer serializer where
+class IEvent serializer => IOutputSerializer serializer where
   serializeEvent :: serializer -> ByteString
 
 data SomeOutputEvent =
   forall event. IOutputSerializer event
     => SomeOutputEvent event
 
-instance IOutputEvent SomeOutputEvent where
-  eventName (SomeOutputEvent event) =
-    eventName event
+instance IEvent SomeOutputEvent where
+  eventKey (SomeOutputEvent event) =
+    eventKey event
+  eventCorrelationId (SomeOutputEvent event) =
+    eventCorrelationId event
+  eventContext (SomeOutputEvent event) =
+    eventContext event
 
 instance IOutputSerializer SomeOutputEvent where
   serializeEvent (SomeOutputEvent event) =
@@ -368,5 +374,5 @@ type Schema
 type SchemaSpec
   = EventSpec -> IO (Maybe Schema)
 
-type BackendSpec
-  = InputSpec -> IO Backend
+type TransportSpec
+  = InputSpec -> IO Transport
