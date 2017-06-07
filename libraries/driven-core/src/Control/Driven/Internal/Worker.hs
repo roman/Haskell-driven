@@ -148,7 +148,7 @@ workerHandler schemaMap deliveriesPerInputEvent eventHandlerMap (WorkerMsg env i
       Just handlers ->
         mapM_ runEventHandler handlers
 
-createWorker
+createWorkerManager
   :: (DrivenEvent -> IO ())
   -> InputEventName
   -> EventSpec
@@ -156,8 +156,8 @@ createWorker
   -> HashMap InputName Input
   -> HashMap OutputEventName [Output]
   -> (WorkerMsg -> IO ())
-  -> IO Worker
-createWorker emitDrivenEvent evName evSpec workerSpec inputMap outputsPerEvent msgHandler = do
+  -> IO WorkerManager
+createWorkerManager emitDrivenEvent evName evSpec workerSpec inputMap outputsPerEvent msgHandler = do
   evInputSource <- fetchWorkerInputSource workerSpec inputMap
 
   let
@@ -183,14 +183,14 @@ createWorker emitDrivenEvent evName evSpec workerSpec inputMap outputsPerEvent m
             }
         msgHandler workerMsg
 
-    cleanupWorker worker = do
-      emitDrivenEvent (EventWorkerDisposed inputName evName)
+    cleanupWorkerManager worker = do
+      emitDrivenEvent (EventWorkerManagerDisposed inputName evName)
       cancel worker
 
   workerSemaphore <- Sem.new (wsCount workerSpec)
   workerLoop <-
     async $ do
-      emitDrivenEvent (EventWorkerCreated evName inputName)
+      emitDrivenEvent (EventWorkerManagerCreated evName inputName)
       forever $ do
         availableWorkers <- Sem.peekAvail workerSemaphore
         messageList <- readFromInput evInputSource (min 1 availableWorkers)
@@ -199,4 +199,4 @@ createWorker emitDrivenEvent evName evSpec workerSpec inputMap outputsPerEvent m
                   (const $ Sem.signal workerSemaphore 1)
                   (const $ void $ callHandler message)
 
-  return (Worker $ cleanupWorker workerLoop)
+  return (WorkerManager $ cleanupWorkerManager workerLoop)

@@ -130,8 +130,8 @@ data DrivenEvent
   | OutputDisposed { deTransportName :: TransportName, deOutputName :: OutputName }
   | EventOutputMissconfigured { deEventName :: EventName }
   | EventSchemaMissconfigured { deEventName :: EventName }
-  | EventWorkerCreated { deInputName :: InputName, deEventName :: EventName }
-  | EventWorkerDisposed { deInputName :: InputName, deEventName :: EventName }
+  | EventWorkerManagerCreated { deInputName :: InputName, deEventName :: EventName }
+  | EventWorkerManagerDisposed { deInputName :: InputName, deEventName :: EventName }
   | EventReceived
       { deInputName      :: InputName
       , deEventName      :: EventName
@@ -243,9 +243,9 @@ data WorkerMsg
     , wmDeleteMsg :: IO ()
     }
 
-newtype Worker
-  = Worker
-    { disposeWorker :: IO () }
+newtype WorkerManager
+  = WorkerManager
+    { disposeWorkerManager :: IO () }
 
 --------------------------------------------------------------------------------
 

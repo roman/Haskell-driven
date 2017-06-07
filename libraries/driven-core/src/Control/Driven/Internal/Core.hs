@@ -20,7 +20,7 @@ data DrivenRuntime
     {
       runtimeInputs       :: HashMap InputName Input
     , runtimeOutputs      :: HashMap OutputName Output
-    , runtimeEventWorkers :: HashMap EventName [Worker]
+    , runtimeEventWorkers :: HashMap EventName [WorkerManager]
     }
 
 --------------------------------------------------------------------------------
@@ -156,11 +156,11 @@ createWorkersPerEvent
   -> HashMap EventName [Output]
   -> HashMap EventName [DeliverySpec]
   -> HashMap EventName [SomeEventHandler]
-  -> IO (HashMap EventName [Worker])
+  -> IO (HashMap EventName [WorkerManager])
 createWorkersPerEvent emitDrivenEvent eventSpecMap schemaMap inputMap outputPerEvent deliveriesPerInputEvent eventHandlers =
   let
-    createWorker' evName evSpec workerSpec =
-          createWorker
+    createWorkerManager' evName evSpec workerSpec =
+          createWorkerManager
             emitDrivenEvent
             evName
             evSpec
@@ -171,7 +171,7 @@ createWorkersPerEvent emitDrivenEvent eventSpecMap schemaMap inputMap outputPerE
   in do
     workersPerEventList <-
       forM (HashMap.toList eventSpecMap) $ \(evName, evSpec) -> do
-        workers <- mapM (createWorker' evName evSpec) (esWorkerSpecs evSpec)
+        workers <- mapM (createWorkerManager' evName evSpec) (esWorkerSpecs evSpec)
         return (evName, workers)
 
     return $ HashMap.fromList workersPerEventList
@@ -218,4 +218,4 @@ stopSystem :: DrivenRuntime -> IO ()
 stopSystem (DrivenRuntime inputMap outputMap workersPerEvent) = do
   mapM_ disposeInput (HashMap.elems inputMap)
   mapM_ disposeOutput (HashMap.elems outputMap)
-  mapM_ (mapM_ disposeWorker) (HashMap.elems workersPerEvent)
+  mapM_ (mapM_ disposeWorkerManager) (HashMap.elems workersPerEvent)
